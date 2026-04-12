@@ -1,0 +1,10 @@
+.git
+.gitignore
+.env
+downloads
+data/data_downloads
+data/monitoring/csv
+logs
+tmp
+*.log
+.DS_Store

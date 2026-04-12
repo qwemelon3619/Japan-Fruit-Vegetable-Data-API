@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lightweight Monitoring Dashboard</title>
+  <style>
+    :root {
+      --bg: #f6f8fa;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --ok: #15803d;
+      --warn: #b45309;
+      --bad: #b91c1c;
+      --border: #e5e7eb;
+    }
+    body {
+      margin: 0;
+      font-family: "IBM Plex Sans", "Noto Sans", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .wrap {
+      max-width: 1100px;
+      margin: 28px auto;
+      padding: 0 16px;
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: 24px;
+    }
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .toolbar input {
+      min-width: 360px;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #fff;
+    }
+    .toolbar button {
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      background: #fff;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(180px, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+    }
+    .label {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .value {
+      font-size: 22px;
+      font-weight: 700;
+    }
+    .ok { color: var(--ok); }
+    .warn { color: var(--warn); }
+    .bad { color: var(--bad); }
+    .meta {
+      margin: 8px 0 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      font-size: 13px;
+    }
+    th, td {
+      border-bottom: 1px solid var(--border);
+      padding: 8px 10px;
+      text-align: left;
+      white-space: nowrap;
+    }
+    th { background: #f3f4f6; }
+    tr:last-child td { border-bottom: none; }
+    .err {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #991b1b;
+      padding: 10px;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      display: none;
+    }
+    @media (max-width: 900px) {
+      .grid { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Lightweight Monitoring</h1>
+    <div class="toolbar">
+      <input id="csvPath" value="/monitoring/snapshots.csv" />
+      <button id="loadBtn">Load</button>
+      <button id="refreshBtn">Auto Refresh: OFF</button>
+    </div>
+    <div id="errBox" class="err"></div>
+    <div class="meta" id="meta">No data loaded.</div>
+
+    <div class="grid">
+      <div class="card"><div class="label">Ready</div><div class="value" id="vReady">-</div></div>
+      <div class="card"><div class="label">HTTP 5xx Rate</div><div class="value" id="v5xx">-</div></div>
+      <div class="card"><div class="label">HTTP p95 (ms)</div><div class="value" id="vP95">-</div></div>
+      <div class="card"><div class="label">Ingestion Status</div><div class="value" id="vIngest">-</div></div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>timestamp</th>
+          <th>ready_ok</th>
+          <th>http_total</th>
+          <th>http_5xx</th>
+          <th>db_errors_total</th>
+          <th>http_p95_ms</th>
+          <th>ingestion_latest_status</th>
+          <th>5xx_rate_delta</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+
+  <script>
+    const pathInput = document.getElementById("csvPath");
+    const errBox = document.getElementById("errBox");
+    const rowsEl = document.getElementById("rows");
+    const metaEl = document.getElementById("meta");
+    const vReady = document.getElementById("vReady");
+    const v5xx = document.getElementById("v5xx");
+    const vP95 = document.getElementById("vP95");
+    const vIngest = document.getElementById("vIngest");
+    const refreshBtn = document.getElementById("refreshBtn");
+
+    let timer = null;
+
+    function setErr(msg) {
+      if (!msg) {
+        errBox.style.display = "none";
+        errBox.textContent = "";
+        return;
+      }
+      errBox.style.display = "block";
+      errBox.textContent = msg;
+    }
+
+    function parseCsv(text) {
+      const lines = text.trim().split(/\r?\n/);
+      if (lines.length < 2) return [];
+      const headers = lines[0].split(",");
+      const out = [];
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(",");
+        if (cols.length < headers.length) continue;
+        const obj = {};
+        headers.forEach((h, idx) => obj[h] = cols[idx]);
+        out.push(obj);
+      }
+      return out;
+    }
+
+    function num(v) {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    function clsByStatus(el, status) {
+      el.classList.remove("ok", "warn", "bad");
+      if (status === "ok" || status === "ready" || status === "success") el.classList.add("ok");
+      else if (status === "partial_failed") el.classList.add("warn");
+      else el.classList.add("bad");
+    }
+
+    function render(data) {
+      rowsEl.innerHTML = "";
+      if (!data.length) {
+        metaEl.textContent = "No snapshot rows.";
+        vReady.textContent = v5xx.textContent = vP95.textContent = vIngest.textContent = "-";
+        return;
+      }
+
+      const latest = data[data.length - 1];
+      const prev = data.length > 1 ? data[data.length - 2] : null;
+      const dTotal = prev ? Math.max(0, num(latest.http_total) - num(prev.http_total)) : 0;
+      const d5xx = prev ? Math.max(0, num(latest.http_5xx) - num(prev.http_5xx)) : 0;
+      const rate = dTotal > 0 ? (d5xx / dTotal) : 0;
+
+      vReady.textContent = latest.ready_ok === "1" ? "READY" : "DOWN";
+      clsByStatus(vReady, latest.ready_ok === "1" ? "ready" : "failed");
+
+      v5xx.textContent = `${(rate * 100).toFixed(2)}%`;
+      clsByStatus(v5xx, rate <= 0.02 ? "ok" : "failed");
+
+      const p95 = latest.http_p95_ms || "";
+      vP95.textContent = p95 ? `${p95} ms` : "-";
+      clsByStatus(vP95, p95 && Number(p95) > 800 ? "failed" : "ok");
+
+      const ingest = latest.ingestion_latest_status || "unknown";
+      vIngest.textContent = ingest;
+      clsByStatus(vIngest, ingest);
+
+      metaEl.textContent = `Rows: ${data.length} | Latest: ${latest.timestamp} | Source: ${pathInput.value}`;
+
+      const recent = data.slice(-40).reverse();
+      for (let i = 0; i < recent.length; i++) {
+        const cur = recent[i];
+        const older = recent[i + 1];
+        const dt = older ? Math.max(0, num(cur.http_total) - num(older.http_total)) : 0;
+        const d5 = older ? Math.max(0, num(cur.http_5xx) - num(older.http_5xx)) : 0;
+        const r = dt > 0 ? (d5 / dt) : 0;
+        const tr = document.createElement("tr");
+        const cells = [
+          cur.timestamp || "",
+          cur.ready_ok || "",
+          cur.http_total || "",
+          cur.http_5xx || "",
+          cur.db_errors_total || "",
+          cur.http_p95_ms || "",
+          cur.ingestion_latest_status || "",
+          `${(r * 100).toFixed(2)}%`,
+        ];
+        for (const value of cells) {
+          const td = document.createElement("td");
+          td.textContent = value;
+          tr.appendChild(td);
+        }
+        rowsEl.appendChild(tr);
+      }
+    }
+
+    async function loadNow() {
+      setErr("");
+      try {
+        const res = await fetch(pathInput.value, { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status} while loading CSV`);
+        const text = await res.text();
+        render(parseCsv(text));
+      } catch (e) {
+        setErr(`Failed to load CSV: ${e.message}`);
+      }
+    }
+
+    document.getElementById("loadBtn").addEventListener("click", loadNow);
+    refreshBtn.addEventListener("click", () => {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+        refreshBtn.textContent = "Auto Refresh: OFF";
+        return;
+      }
+      timer = setInterval(loadNow, 10000);
+      refreshBtn.textContent = "Auto Refresh: ON (10s)";
+      loadNow();
+    });
+
+    loadNow();
+  </script>
+</body>
+</html>
