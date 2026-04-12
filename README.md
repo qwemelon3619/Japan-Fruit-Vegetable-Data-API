@@ -79,6 +79,11 @@ Run all tests:
 go test ./...
 ```
 
+Downloader example (merge into one UTF-8 CSV and delete source files):
+```bash
+go run ./cmd/downloader -date 20260412 -out ./data/data_downloads
+```
+
 Run API integration tests:
 ```bash
 RUN_API_INTEGRATION_TESTS=1 API_BASE_URL=http://localhost:8080 go test ./tests/api -count=1

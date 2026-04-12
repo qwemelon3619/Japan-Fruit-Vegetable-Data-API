@@ -13,9 +13,21 @@ START_AT="$(TZ=Asia/Tokyo date +%Y-%m-%dT%H:%M:%S%z)"
 echo "[$START_AT] daily pipeline start (date=$TODAY)"
 
 if command -v downloader >/dev/null 2>&1; then
-  downloader -date "$TODAY" -out "$DATA_ROOT/data_downloads" -wait-per-date 0s
+  downloader \
+    -date "$TODAY" \
+    -out "$DATA_ROOT/data_downloads" \
+    -save-raw=false \
+    -merge-utf8=true \
+    -delete-source-after-merge=true \
+    -wait-per-date 0s
 else
-  go run ./cmd/downloader -date "$TODAY" -out "$DATA_ROOT/data_downloads" -wait-per-date 0s
+  go run ./cmd/downloader \
+    -date "$TODAY" \
+    -out "$DATA_ROOT/data_downloads" \
+    -save-raw=false \
+    -merge-utf8=true \
+    -delete-source-after-merge=true \
+    -wait-per-date 0s
 fi
 
 UTF8_DIR="$DATA_ROOT/data_downloads/utf8/$TODAY"

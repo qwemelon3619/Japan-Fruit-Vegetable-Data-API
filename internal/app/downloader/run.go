@@ -1,6 +1,7 @@
 package downloader
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"flag"
@@ -11,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -35,6 +37,8 @@ type options struct {
 	marketFilter string
 	saveRaw      bool
 	saveUTF8     bool
+	mergeUTF8    bool
+	deleteSource bool
 	utf8BOM      bool
 	skipNoData   bool
 	timeout      time.Duration
@@ -131,6 +135,16 @@ func Run(args []string) error {
 			}
 		}
 
+		if opts.saveUTF8 && opts.mergeUTF8 {
+			utf8Dir := filepath.Join(opts.outDir, "utf8", d)
+			mergedPath, mergedCount, err := mergeUTF8CSVFiles(utf8Dir, opts.deleteSource)
+			if err != nil {
+				log.Warn("utf8 merge failed", "date", d, "dir", utf8Dir, "error", err)
+			} else if mergedCount > 1 {
+				log.Info("utf8 csv merged", "date", d, "merged_file", mergedPath, "source_files", mergedCount, "source_deleted", opts.deleteSource)
+			}
+		}
+
 		if i < len(dates)-1 && opts.waitPerDate > 0 {
 			log.Info("waiting before next date", "wait", opts.waitPerDate.String(), "next_index", i+2, "total_dates", len(dates))
 			time.Sleep(opts.waitPerDate)
@@ -149,8 +163,10 @@ func parseFlags(args []string) (options, error) {
 	fs.StringVar(&o.to, "to", "", "end date YYYYMMDD (inclusive)")
 	fs.StringVar(&o.outDir, "out", "data/data_downloads", "output directory")
 	fs.StringVar(&o.marketFilter, "market", "", "market name contains filter")
-	fs.BoolVar(&o.saveRaw, "save-raw", true, "save original raw csv bytes")
+	fs.BoolVar(&o.saveRaw, "save-raw", false, "save original raw csv bytes")
 	fs.BoolVar(&o.saveUTF8, "save-utf8", true, "save utf8 converted csv")
+	fs.BoolVar(&o.mergeUTF8, "merge-utf8", true, "merge UTF-8 csv files by date into a single file")
+	fs.BoolVar(&o.deleteSource, "delete-source-after-merge", true, "delete source UTF-8 csv files after merge")
 	fs.BoolVar(&o.utf8BOM, "utf8-bom", true, "add UTF-8 BOM when saving utf8")
 	fs.BoolVar(&o.skipNoData, "skip-no-data", true, "skip date when no data exists")
 	fs.DurationVar(&o.timeout, "timeout", 30*time.Second, "http timeout")
@@ -159,6 +175,98 @@ func parseFlags(args []string) (options, error) {
 		return o, err
 	}
 	return o, nil
+}
+
+func mergeUTF8CSVFiles(dir string, deleteSource bool) (string, int, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return "", 0, err
+	}
+
+	targetName := "all_" + filepath.Base(dir) + ".csv"
+
+	var csvPaths []string
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if !strings.EqualFold(filepath.Ext(name), ".csv") {
+			continue
+		}
+		if name == targetName {
+			continue
+		}
+		csvPaths = append(csvPaths, filepath.Join(dir, name))
+	}
+	sort.Strings(csvPaths)
+
+	targetPath := filepath.Join(dir, targetName)
+	if len(csvPaths) == 0 {
+		return targetPath, 0, nil
+	}
+	if len(csvPaths) == 1 {
+		if csvPaths[0] != targetPath {
+			if err := os.Rename(csvPaths[0], targetPath); err != nil {
+				return "", 1, err
+			}
+		}
+		return targetPath, 1, nil
+	}
+
+	tmpPath := targetPath + ".tmp"
+
+	out, err := os.Create(tmpPath)
+	if err != nil {
+		return "", len(csvPaths), err
+	}
+
+	writeErr := func(e error) (string, int, error) {
+		_ = out.Close()
+		_ = os.Remove(tmpPath)
+		return "", len(csvPaths), e
+	}
+
+	for i, path := range csvPaths {
+		in, err := os.Open(path)
+		if err != nil {
+			return writeErr(err)
+		}
+
+		reader := bufio.NewReader(in)
+		if i > 0 {
+			if _, err := reader.ReadString('\n'); err != nil && !errors.Is(err, io.EOF) {
+				_ = in.Close()
+				return writeErr(err)
+			}
+		}
+
+		if _, err := io.Copy(out, reader); err != nil {
+			_ = in.Close()
+			return writeErr(err)
+		}
+		if err := in.Close(); err != nil {
+			return writeErr(err)
+		}
+	}
+
+	if err := out.Close(); err != nil {
+		return writeErr(err)
+	}
+	if err := os.Rename(tmpPath, targetPath); err != nil {
+		_ = os.Remove(tmpPath)
+		return "", len(csvPaths), err
+	}
+
+	if deleteSource {
+		for _, path := range csvPaths {
+			if err := os.Remove(path); err != nil {
+				return targetPath, len(csvPaths), err
+			}
+		}
+	}
+
+	return targetPath, len(csvPaths), nil
 }
 
 func resolveDates(client *http.Client, o options) ([]string, error) {
