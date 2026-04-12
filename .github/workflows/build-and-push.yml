@@ -1,0 +1,78 @@
+name: Build and Push to Docker Hub
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            /home/runner/go/pkg/mod
+            /home/runner/.cache/go-build
+          key: ${{ runner.os }}-go-cache-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-cache-
+
+      - name: Run tests
+        run: go test ./...
+
+  build-and-push:
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker-container
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push images
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+          DOCKER_NS: ${{ secrets.DOCKERHUB_USERNAME }}
+        run: |
+          images=(
+            "japan-data-api"
+            "japan-data-pipeline-cron"
+          )
+
+          for image in "${images[@]}"; do
+            echo "Building and pushing ${DOCKER_NS}/${image}..."
+            docker buildx build \
+              --platform linux/amd64 \
+              -t "${DOCKER_NS}/${image}:${IMAGE_TAG}" \
+              -t "${DOCKER_NS}/${image}:latest" \
+              -f Dockerfile . \
+              --push
+          done
+
+      - name: Docker Logout
+        run: docker logout
