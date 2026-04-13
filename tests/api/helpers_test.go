@@ -34,6 +34,10 @@ type priceDailySeedRow struct {
 	MarketCode string `json:"market_code"`
 }
 
+type dimensionSeedRow struct {
+	Code string `json:"code"`
+}
+
 type endpointCase struct {
 	name       string
 	method     string
@@ -109,18 +113,29 @@ func assertInvalidArgument(t *testing.T, body []byte) {
 func fetchEndpointSeed(t *testing.T, base string) endpointSeed {
 	t.Helper()
 	client := &http.Client{Timeout: 15 * time.Second}
-	status, body := doAPIRequest(t, client, http.MethodGet, base+"/v1/prices/daily?limit=1")
+	status, body := doAPIRequest(t, client, http.MethodGet, base+"/v1/items?limit=1")
 	if status != http.StatusOK {
 		return endpointSeed{}
 	}
 	okBody := mustDecodeOKBody(t, body)
+	var items []dimensionSeedRow
+	if err := json.Unmarshal(okBody.Data, &items); err != nil || len(items) == 0 || strings.TrimSpace(items[0].Code) == "" {
+		return endpointSeed{}
+	}
+
+	itemCode := items[0].Code
+	status, body = doAPIRequest(t, client, http.MethodGet, base+"/v1/prices/latest?item_code="+itemCode+"&limit=1")
+	if status != http.StatusOK {
+		return endpointSeed{ItemCode: itemCode}
+	}
+	okBody = mustDecodeOKBody(t, body)
 	var rows []priceDailySeedRow
 	if err := json.Unmarshal(okBody.Data, &rows); err != nil || len(rows) == 0 {
-		return endpointSeed{}
+		return endpointSeed{ItemCode: itemCode}
 	}
 	return endpointSeed{
 		TradeDate:  rows[0].TradeDate,
-		ItemCode:   rows[0].ItemCode,
+		ItemCode:   itemCode,
 		MarketCode: rows[0].MarketCode,
 	}
 }

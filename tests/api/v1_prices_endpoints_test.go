@@ -21,37 +21,93 @@ func TestV1PricesEndpoints_Min4Each(t *testing.T) {
 
 	t.Run("/v1/prices/latest", func(t *testing.T) {
 		runEndpointCases(t, base, seed, []endpointCase{
-			{name: "get_ok_default", method: http.MethodGet, path: func(base string, _ endpointSeed) string { return base + "/v1/prices/latest" }, wantStatus: http.StatusOK, check: assertLatestPayload},
-			{name: "get_ok_with_filters", method: http.MethodGet, path: func(base string, seed endpointSeed) string { return base + "/v1/prices/latest?item_code=" + seed.ItemCode + "&market_code=" + seed.MarketCode + "&limit=10" }, wantStatus: http.StatusOK, check: assertLatestFilteredPayload(seed)},
-			{name: "invalid_from_400", method: http.MethodGet, path: func(base string, _ endpointSeed) string { return base + "/v1/prices/latest?from=2026/04/01" }, wantStatus: http.StatusBadRequest, check: assertInvalidArgument},
+			{name: "get_ok_with_item", method: http.MethodGet, path: func(base string, seed endpointSeed) string {
+				return base + "/v1/prices/latest?item_code=" + seed.ItemCode
+			}, wantStatus: http.StatusOK, check: assertLatestPayload},
+			{name: "get_ok_with_filters", method: http.MethodGet, path: func(base string, seed endpointSeed) string {
+				return base + "/v1/prices/latest?item_code=" + seed.ItemCode + "&market_code=" + seed.MarketCode + "&limit=10"
+			}, wantStatus: http.StatusOK, check: assertLatestFilteredPayload(seed)},
+			{name: "missing_item_code_400", method: http.MethodGet, path: func(base string, _ endpointSeed) string { return base + "/v1/prices/latest" }, wantStatus: http.StatusBadRequest, check: assertInvalidArgument},
+			{name: "from_not_supported_400", method: http.MethodGet, path: func(base string, seed endpointSeed) string {
+				return base + "/v1/prices/latest?item_code=" + seed.ItemCode + "&from=2026-04-01"
+			}, wantStatus: http.StatusBadRequest, check: assertInvalidArgument},
+			{name: "to_not_supported_400", method: http.MethodGet, path: func(base string, seed endpointSeed) string {
+				return base + "/v1/prices/latest?item_code=" + seed.ItemCode + "&to=2026-04-30"
+			}, wantStatus: http.StatusBadRequest, check: assertInvalidArgument},
+			{name: "date_not_supported_400", method: http.MethodGet, path: func(base string, seed endpointSeed) string {
+				return base + "/v1/prices/latest?item_code=" + seed.ItemCode + "&date=2026-04-01"
+			}, wantStatus: http.StatusBadRequest, check: assertInvalidArgument},
 			{name: "post_405", method: http.MethodPost, path: func(base string, _ endpointSeed) string { return base + "/v1/prices/latest" }, wantStatus: http.StatusMethodNotAllowed, check: assertMethodNotAllowed},
 		})
 	})
 
 	t.Run("/v1/prices/daily", func(t *testing.T) {
 		runEndpointCases(t, base, seed, []endpointCase{
-			{name: "get_ok_default", method: http.MethodGet, path: func(base string, _ endpointSeed) string { return base + "/v1/prices/daily" }, wantStatus: http.StatusOK},
-			{name: "get_ok_with_range", method: http.MethodGet, path: func(base string, _ endpointSeed) string { return base + "/v1/prices/daily?from=2026-04-01&to=2026-04-10&limit=10" }, wantStatus: http.StatusOK},
-			{name: "invalid_date_400", method: http.MethodGet, path: func(base string, _ endpointSeed) string { return base + "/v1/prices/daily?date=20260401" }, wantStatus: http.StatusBadRequest, check: assertInvalidArgument},
-			{name: "to_before_from_400", method: http.MethodGet, path: func(base string, _ endpointSeed) string { return base + "/v1/prices/daily?from=2026-04-10&to=2026-04-01" }, wantStatus: http.StatusBadRequest, check: assertInvalidArgument},
+			{name: "get_ok_with_item", method: http.MethodGet, path: func(base string, seed endpointSeed) string {
+				return base + "/v1/prices/daily?item_code=" + seed.ItemCode
+			}, wantStatus: http.StatusOK},
+			{name: "get_ok_with_range", method: http.MethodGet, path: func(base string, seed endpointSeed) string {
+				return base + "/v1/prices/daily?item_code=" + seed.ItemCode + "&from=2026-04-01&to=2026-04-10&limit=10"
+			}, wantStatus: http.StatusOK},
+			{name: "missing_item_code_400", method: http.MethodGet, path: func(base string, _ endpointSeed) string { return base + "/v1/prices/daily" }, wantStatus: http.StatusBadRequest, check: assertInvalidArgument},
+			{name: "invalid_date_400", method: http.MethodGet, path: func(base string, seed endpointSeed) string {
+				return base + "/v1/prices/daily?item_code=" + seed.ItemCode + "&date=20260401"
+			}, wantStatus: http.StatusBadRequest, check: assertInvalidArgument},
+			{name: "to_before_from_400", method: http.MethodGet, path: func(base string, _ endpointSeed) string {
+				return base + "/v1/prices/daily?item_code=" + seed.ItemCode + "&from=2026-04-10&to=2026-04-01"
+			}, wantStatus: http.StatusBadRequest, check: assertInvalidArgument},
 		})
 	})
 
 	t.Run("/v1/prices/trend", func(t *testing.T) {
 		runEndpointCases(t, base, seed, []endpointCase{
-			{name: "get_ok_default", method: http.MethodGet, path: func(base string, _ endpointSeed) string { return base + "/v1/prices/trend" }, wantStatus: http.StatusOK},
-			{name: "get_ok_with_range", method: http.MethodGet, path: func(base string, _ endpointSeed) string { return base + "/v1/prices/trend?from=2026-04-01&to=2026-04-10" }, wantStatus: http.StatusOK},
-			{name: "invalid_from_400", method: http.MethodGet, path: func(base string, _ endpointSeed) string { return base + "/v1/prices/trend?from=2026/04/01" }, wantStatus: http.StatusBadRequest, check: assertInvalidArgument},
-			{name: "range_too_large_400", method: http.MethodGet, path: func(base string, _ endpointSeed) string { return base + "/v1/prices/trend?from=2020-01-01&to=2026-01-01" }, wantStatus: http.StatusBadRequest, check: assertInvalidArgument},
+			{name: "get_ok_with_item", method: http.MethodGet, path: func(base string, seed endpointSeed) string {
+				return base + "/v1/prices/trend?item_code=" + seed.ItemCode
+			}, wantStatus: http.StatusOK},
+			{name: "get_ok_with_range", method: http.MethodGet, path: func(base string, seed endpointSeed) string {
+				return base + "/v1/prices/trend?item_code=" + seed.ItemCode + "&from=2026-04-01&to=2026-04-10"
+			}, wantStatus: http.StatusOK},
+			{name: "missing_item_code_400", method: http.MethodGet, path: func(base string, _ endpointSeed) string { return base + "/v1/prices/trend" }, wantStatus: http.StatusBadRequest, check: assertInvalidArgument},
+			{name: "invalid_from_400", method: http.MethodGet, path: func(base string, seed endpointSeed) string {
+				return base + "/v1/prices/trend?item_code=" + seed.ItemCode + "&from=2026/04/01"
+			}, wantStatus: http.StatusBadRequest, check: assertInvalidArgument},
+			{name: "range_too_large_400", method: http.MethodGet, path: func(base string, _ endpointSeed) string {
+				return base + "/v1/prices/trend?item_code=" + seed.ItemCode + "&from=2020-01-01&to=2026-01-01"
+			}, wantStatus: http.StatusBadRequest, check: assertInvalidArgument},
+		})
+	})
+
+	t.Run("/v1/prices/trend presets", func(t *testing.T) {
+		runEndpointCases(t, base, seed, []endpointCase{
+			{name: "get_ok_1m", method: http.MethodGet, path: func(base string, seed endpointSeed) string {
+				return base + "/v1/prices/trend/1m?item_code=" + seed.ItemCode
+			}, wantStatus: http.StatusOK},
+			{name: "get_ok_6m", method: http.MethodGet, path: func(base string, seed endpointSeed) string {
+				return base + "/v1/prices/trend/6m?item_code=" + seed.ItemCode
+			}, wantStatus: http.StatusOK},
+			{name: "get_ok_1y", method: http.MethodGet, path: func(base string, seed endpointSeed) string {
+				return base + "/v1/prices/trend/1y?item_code=" + seed.ItemCode
+			}, wantStatus: http.StatusOK},
+			{name: "missing_item_code_400_1m", method: http.MethodGet, path: func(base string, _ endpointSeed) string { return base + "/v1/prices/trend/1m" }, wantStatus: http.StatusBadRequest, check: assertInvalidArgument},
+			{name: "post_405_1m", method: http.MethodPost, path: func(base string, _ endpointSeed) string { return base + "/v1/prices/trend/1m" }, wantStatus: http.StatusMethodNotAllowed, check: assertMethodNotAllowed},
 		})
 	})
 
 	t.Run("/v1/prices/summary", func(t *testing.T) {
 		runEndpointCases(t, base, seed, []endpointCase{
-			{name: "get_ok_default", method: http.MethodGet, path: func(base string, _ endpointSeed) string { return base + "/v1/prices/summary" }, wantStatus: http.StatusOK},
-			{name: "get_ok_group_month", method: http.MethodGet, path: func(base string, _ endpointSeed) string { return base + "/v1/prices/summary?group_by=month&from=2026-04-01&to=2026-04-10" }, wantStatus: http.StatusOK},
-			{name: "invalid_group_by_400", method: http.MethodGet, path: func(base string, _ endpointSeed) string { return base + "/v1/prices/summary?group_by=yearly" }, wantStatus: http.StatusBadRequest, check: assertInvalidArgument},
-			{name: "invalid_to_400", method: http.MethodGet, path: func(base string, _ endpointSeed) string { return base + "/v1/prices/summary?from=2026-04-01&to=20260410" }, wantStatus: http.StatusBadRequest, check: assertInvalidArgument},
+			{name: "get_ok_with_item", method: http.MethodGet, path: func(base string, seed endpointSeed) string {
+				return base + "/v1/prices/summary?item_code=" + seed.ItemCode
+			}, wantStatus: http.StatusOK},
+			{name: "get_ok_group_month", method: http.MethodGet, path: func(base string, seed endpointSeed) string {
+				return base + "/v1/prices/summary?item_code=" + seed.ItemCode + "&group_by=month&from=2026-04-01&to=2026-04-10"
+			}, wantStatus: http.StatusOK},
+			{name: "missing_item_code_400", method: http.MethodGet, path: func(base string, _ endpointSeed) string { return base + "/v1/prices/summary" }, wantStatus: http.StatusBadRequest, check: assertInvalidArgument},
+			{name: "invalid_group_by_400", method: http.MethodGet, path: func(base string, seed endpointSeed) string {
+				return base + "/v1/prices/summary?item_code=" + seed.ItemCode + "&group_by=yearly"
+			}, wantStatus: http.StatusBadRequest, check: assertInvalidArgument},
+			{name: "invalid_to_400", method: http.MethodGet, path: func(base string, _ endpointSeed) string {
+				return base + "/v1/prices/summary?item_code=" + seed.ItemCode + "&from=2026-04-01&to=20260410"
+			}, wantStatus: http.StatusBadRequest, check: assertInvalidArgument},
 		})
 	})
 }

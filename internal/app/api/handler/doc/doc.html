@@ -165,6 +165,7 @@
       <p data-i18n-html="llmDoc"><strong>LLM Doc:</strong> <a href="/doc-llm" target="_blank" rel="noreferrer"><code>/doc-llm</code></a> (OpenAI/LLM-friendly JSON)</p>
       <p data-i18n-html="dataSource"><strong>Data source:</strong> MAFF wholesale market data portal (<code>seisen.maff.go.jp</code>).</p>
       <p class="muted" data-i18n="attributionNote">Data rights and usage conditions belong to the original provider. This API is an independent implementation.</p>
+      <p class="muted" data-i18n="metaNote">Response meta includes total row counts and optional paging fields (limit/offset). Some endpoints add extra fields like latest_trade_date, group_by, or metric.</p>
       <div class="chips">
         <span class="chip" data-i18n-html="rule1"><code>date/from/to</code>: YYYY-MM-DD</span>
         <span class="chip" data-i18n="rule2">from~to max 366 days</span>
@@ -214,6 +215,12 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
         <p data-i18n="dashboardDesc">Monitoring dashboard HTML page.</p>
         <h3 data-i18n="requestExample">Request Example</h3>
         <pre>curl -s "https://jp-vgfr-api.seungpyo.xyz/monitoring/dashboard"</pre>
+        <h3 data-i18n="responseExample">Response Example</h3>
+        <pre>&lt;!doctype html&gt;
+&lt;html lang="en"&gt;
+  &lt;head&gt;...&lt;/head&gt;
+  &lt;body&gt;Monitoring dashboard&lt;/body&gt;
+&lt;/html&gt;</pre>
       </div>
 
       <div class="endpoint">
@@ -238,7 +245,11 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
   "data": {
     "earliest_trade_date": "2021-04-08",
     "latest_trade_date": "2026-04-10",
-    "fact_rows_total": 123456
+    "fact_rows_total": 123456,
+    "last_ingestion_run_id": 42,
+    "last_ingestion_status": "success",
+    "last_ingestion_run_type": "daily",
+    "last_ingestion_finished_at": "2026-04-10T01:23:45Z"
   },
   "meta": {}
 }</pre>
@@ -275,31 +286,65 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
 
       <div class="endpoint">
         <div class="path"><span class="method">GET</span> /v1/prices/daily</div>
-        <p data-i18n="dailyDesc">Raw daily fact rows with optional filters and paging.</p>
+        <p data-i18n="dailyDesc">Raw daily fact rows for a required item_code with optional filters and paging.</p>
         <h3 data-i18n="parameters">Parameters</h3>
         <table>
           <thead><tr><th>Name</th><th>In</th><th>Required</th><th>Type</th><th>Description</th><th>Example</th></tr></thead>
           <tbody>
+            <tr><td><code>item_code</code></td><td>query</td><td>yes</td><td>string</td><td>Required item code (max 32)</td><td><code>30100</code></td></tr>
             <tr><td><code>date</code></td><td>query</td><td>no</td><td>string</td><td>Single date</td><td><code>2026-04-01</code></td></tr>
-            <tr><td><code>from</code>, <code>to</code></td><td>query</td><td>no</td><td>string</td><td>Date range (max 366 days)</td><td><code>2026-04-01</code> ~ <code>2026-04-10</code></td></tr>
-            <tr><td><code>market_code</code>, <code>item_code</code>, <code>origin_code</code></td><td>query</td><td>no</td><td>string</td><td>Exact code filters (max 32)</td><td><code>30100</code></td></tr>
+            <tr><td><code>from</code>, <code>to</code></td><td>query</td><td>no</td><td>string</td><td>Date range (max 366 days). If <code>date/from/to</code> are all omitted, default <code>from=today-31d</code> is applied.</td><td><code>2026-04-01</code> ~ <code>2026-04-10</code></td></tr>
+            <tr><td><code>market_code</code>, <code>origin_code</code></td><td>query</td><td>no</td><td>string</td><td>Exact code filters (max 32)</td><td><code>13300</code></td></tr>
             <tr><td><code>limit</code>, <code>offset</code></td><td>query</td><td>no</td><td>int</td><td>Paging</td><td><code>100</code>, <code>0</code></td></tr>
             <tr><td><code>sort</code>, <code>order</code></td><td>query</td><td>no</td><td>string</td><td>Sorting</td><td><code>trade_date</code>, <code>desc</code></td></tr>
           </tbody>
         </table>
         <h3 data-i18n="requestExample">Request Example</h3>
         <pre>curl -s "https://jp-vgfr-api.seungpyo.xyz/v1/prices/daily?item_code=30100&from=2026-04-01&to=2026-04-10&limit=10"</pre>
+        <h3 data-i18n="responseExample">Response Example</h3>
+        <pre>{
+  "data": [
+    {
+      "trade_date": "2026-04-10",
+      "weekday_ja": "金",
+      "market_code": "13300",
+      "market_name": "Tokyo",
+      "item_code": "30100",
+      "item_name": "Daikon",
+      "origin_code": "40100",
+      "origin_name": "Hokkaido",
+      "grade": "A",
+      "class": "L",
+      "product_name": "Daikon",
+      "unit_weight": "10kg",
+      "item_total_ton": 18.4,
+      "arrival_ton": 2.3,
+      "price_high_yen": 2800,
+      "price_mid_yen": 2480,
+      "price_low_yen": 2100,
+      "trend_label": "steady",
+      "source_file": "20260410_tokyo.csv",
+      "source_row_no": 128
+    }
+  ],
+  "meta": {
+    "limit": 10,
+    "offset": 0,
+    "total": 1
+  }
+}</pre>
       </div>
 
       <div class="endpoint">
         <div class="path"><span class="method">GET</span> /v1/prices/latest</div>
-        <p data-i18n="latestDesc">Returns rows for the latest available trade date, optionally filtered by market/item/origin.</p>
+        <p data-i18n="latestDesc">Returns rows for the latest available trade date for a required item_code. date, from, and to are not supported.</p>
         <h3 data-i18n="parameters">Parameters</h3>
         <table>
           <thead><tr><th>Name</th><th>In</th><th>Required</th><th>Type</th><th>Description</th><th>Example</th></tr></thead>
           <tbody>
-            <tr><td><code>from</code>, <code>to</code></td><td>query</td><td>no</td><td>string</td><td>Date range filter used before picking the latest available trade date</td><td><code>2026-04-01</code> ~ <code>2026-04-30</code></td></tr>
-            <tr><td><code>market_code</code>, <code>item_code</code>, <code>origin_code</code></td><td>query</td><td>no</td><td>string</td><td>Exact code filters (max 32)</td><td><code>30100</code></td></tr>
+            <tr><td><code>item_code</code></td><td>query</td><td>yes</td><td>string</td><td>Required item code (max 32)</td><td><code>30100</code></td></tr>
+            <tr><td><code>date</code>, <code>from</code>, <code>to</code></td><td>query</td><td>no</td><td>string</td><td>Not supported on this endpoint</td><td><code>n/a</code></td></tr>
+            <tr><td><code>market_code</code>, <code>origin_code</code></td><td>query</td><td>no</td><td>string</td><td>Exact code filters (max 32)</td><td><code>13300</code></td></tr>
             <tr><td><code>limit</code>, <code>offset</code></td><td>query</td><td>no</td><td>int</td><td>Paging</td><td><code>100</code>, <code>0</code></td></tr>
             <tr><td><code>sort</code>, <code>order</code></td><td>query</td><td>no</td><td>string</td><td>Sorting</td><td><code>trade_date</code>, <code>desc</code></td></tr>
           </tbody>
@@ -327,13 +372,14 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
 
       <div class="endpoint">
         <div class="path"><span class="method">GET</span> /v1/prices/trend</div>
-        <p data-i18n="trendDesc">Trend aggregation by date.</p>
+        <p data-i18n="trendDesc">Trend aggregation by date for a required item_code.</p>
         <h3 data-i18n="parameters">Parameters</h3>
         <table>
           <thead><tr><th>Name</th><th>In</th><th>Required</th><th>Type</th><th>Description</th><th>Example</th></tr></thead>
           <tbody>
-            <tr><td><code>from</code>, <code>to</code></td><td>query</td><td>no</td><td>string</td><td>Date range filter</td><td><code>2026-04-01</code> ~ <code>2026-04-30</code></td></tr>
-            <tr><td><code>market_code</code>, <code>item_code</code>, <code>origin_code</code></td><td>query</td><td>no</td><td>string</td><td>Exact code filters</td><td><code>30100</code></td></tr>
+            <tr><td><code>item_code</code></td><td>query</td><td>yes</td><td>string</td><td>Required item code (max 32)</td><td><code>30100</code></td></tr>
+            <tr><td><code>from</code>, <code>to</code></td><td>query</td><td>no</td><td>string</td><td>Date range filter. If omitted, default <code>from=today-31d</code> is applied.</td><td><code>2026-04-01</code> ~ <code>2026-04-30</code></td></tr>
+            <tr><td><code>market_code</code>, <code>origin_code</code></td><td>query</td><td>no</td><td>string</td><td>Exact code filters</td><td><code>13300</code></td></tr>
           </tbody>
         </table>
         <h3 data-i18n="requestExample">Request Example</h3>
@@ -350,24 +396,61 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
       "arrival_ton_sum": 14.2
     }
   ],
-  "meta": { "rows": 1 }
+  "meta": { "total": 1 }
+}</pre>
+      </div>
+
+      <div class="endpoint">
+        <div class="path"><span class="method">GET</span> /v1/prices/trend/1m | /v1/prices/trend/6m | /v1/prices/trend/1y</div>
+        <p>Preset trend endpoints that call the same trend aggregation with automatic date windows for the last 1 month, 6 months, or 1 year.</p>
+        <h3 data-i18n="requestExample">Request Example</h3>
+        <pre>curl -s "https://jp-vgfr-api.seungpyo.xyz/v1/prices/trend/1m?item_code=30100"</pre>
+        <h3 data-i18n="responseExample">Response Example</h3>
+        <pre>{
+  "data": [
+    {
+      "trade_date": "2026-04-01",
+      "rows_count": 12,
+      "avg_price_mid_yen": 2510.5,
+      "max_price_mid_yen": 3000,
+      "min_price_mid_yen": 2000,
+      "arrival_ton_sum": 14.2
+    }
+  ],
+  "meta": { "total": 1 }
 }</pre>
       </div>
 
       <div class="endpoint">
         <div class="path"><span class="method">GET</span> /v1/prices/summary</div>
-        <p data-i18n="summaryDesc">Summary aggregation by day/week/month buckets.</p>
+        <p data-i18n="summaryDesc">Summary aggregation by day/week/month buckets for a required item_code.</p>
         <h3 data-i18n="parameters">Parameters</h3>
         <table>
           <thead><tr><th>Name</th><th>In</th><th>Required</th><th>Type</th><th>Description</th><th>Example</th></tr></thead>
           <tbody>
+            <tr><td><code>item_code</code></td><td>query</td><td>yes</td><td>string</td><td>Required item code (max 32)</td><td><code>30100</code></td></tr>
             <tr><td><code>group_by</code></td><td>query</td><td>no</td><td>string</td><td><code>day|week|month</code> (default: day)</td><td><code>month</code></td></tr>
-            <tr><td><code>from</code>, <code>to</code></td><td>query</td><td>no</td><td>string</td><td>Date range filter</td><td><code>2026-04-01</code> ~ <code>2026-04-30</code></td></tr>
-            <tr><td><code>market_code</code>, <code>item_code</code>, <code>origin_code</code></td><td>query</td><td>no</td><td>string</td><td>Exact code filters</td><td><code>30100</code></td></tr>
+            <tr><td><code>from</code>, <code>to</code></td><td>query</td><td>no</td><td>string</td><td>Date range filter. If omitted, default <code>from=today-31d</code> is applied.</td><td><code>2026-04-01</code> ~ <code>2026-04-30</code></td></tr>
+            <tr><td><code>market_code</code>, <code>origin_code</code></td><td>query</td><td>no</td><td>string</td><td>Exact code filters</td><td><code>13300</code></td></tr>
           </tbody>
         </table>
         <h3 data-i18n="requestExample">Request Example</h3>
         <pre>curl -s "https://jp-vgfr-api.seungpyo.xyz/v1/prices/summary?group_by=month&item_code=30100&from=2026-01-01&to=2026-04-30"</pre>
+        <h3 data-i18n="responseExample">Response Example</h3>
+        <pre>{
+  "data": [
+    {
+      "period": "2026-04",
+      "rows_count": 120,
+      "avg_price_mid_yen": 2440.3,
+      "arrival_ton_sum": 181.6
+    }
+  ],
+  "meta": {
+    "group_by": "month",
+    "total": 1
+  }
+}</pre>
       </div>
     </div>
 
@@ -389,6 +472,21 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
         </table>
         <h3 data-i18n="requestExample">Request Example</h3>
         <pre>curl -s "https://jp-vgfr-api.seungpyo.xyz/v1/compare/markets?date=2026-04-16&item_code=30100&metric=price_mid"</pre>
+        <h3 data-i18n="responseExample">Response Example</h3>
+        <pre>{
+  "data": [
+    {
+      "market_code": "13300",
+      "market_name": "Tokyo",
+      "rows_count": 8,
+      "metric_value": 2480.5
+    }
+  ],
+  "meta": {
+    "metric": "price_mid",
+    "rows": 1
+  }
+}</pre>
       </div>
 
       <div class="endpoint">
@@ -407,15 +505,99 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
         </table>
         <h3 data-i18n="requestExample">Request Example</h3>
         <pre>curl -s "https://jp-vgfr-api.seungpyo.xyz/v1/rankings/items?date=2026-04-16&metric=arrival&limit=20"</pre>
+        <h3 data-i18n="responseExample">Response Example</h3>
+        <pre>{
+  "data": [
+    {
+      "item_code": "30100",
+      "item_name": "Daikon",
+      "rows_count": 14,
+      "metric_value": 42.7
+    }
+  ],
+  "meta": {
+    "metric": "arrival",
+    "limit": 20,
+    "rows": 1
+  }
+}</pre>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Ingestion Admin APIs</h2>
+
+      <div class="endpoint">
+        <div class="path"><span class="method">GET</span> /ingestion/runs</div>
+        <p>Lists ingestion runs in descending id order.</p>
+        <h3 data-i18n="parameters">Parameters</h3>
+        <table>
+          <thead><tr><th>Name</th><th>In</th><th>Required</th><th>Type</th><th>Description</th><th>Example</th></tr></thead>
+          <tbody>
+            <tr><td><code>limit</code></td><td>query</td><td>no</td><td>int</td><td>Rows (1~500)</td><td><code>50</code></td></tr>
+            <tr><td><code>offset</code></td><td>query</td><td>no</td><td>int</td><td>Page offset (&gt;=0)</td><td><code>0</code></td></tr>
+          </tbody>
+        </table>
+        <h3 data-i18n="responseExample">Response Example</h3>
+        <pre>{
+  "data": [
+    {
+      "id": 42,
+      "run_type": "daily",
+      "status": "success",
+      "started_at": "2026-04-10T01:00:00Z",
+      "finished_at": "2026-04-10T01:23:45Z"
+    }
+  ],
+  "meta": {
+    "limit": 50,
+    "offset": 0,
+    "total": 1
+  }
+}</pre>
+      </div>
+
+      <div class="endpoint">
+        <div class="path"><span class="method">GET</span> /ingestion/files</div>
+        <p>Lists ingestion file rows in descending id order, optionally filtered by run_id.</p>
+        <h3 data-i18n="parameters">Parameters</h3>
+        <table>
+          <thead><tr><th>Name</th><th>In</th><th>Required</th><th>Type</th><th>Description</th><th>Example</th></tr></thead>
+          <tbody>
+            <tr><td><code>run_id</code></td><td>query</td><td>no</td><td>int</td><td>Positive ingestion run id</td><td><code>42</code></td></tr>
+            <tr><td><code>limit</code></td><td>query</td><td>no</td><td>int</td><td>Rows (1~1000)</td><td><code>100</code></td></tr>
+            <tr><td><code>offset</code></td><td>query</td><td>no</td><td>int</td><td>Page offset (&gt;=0)</td><td><code>0</code></td></tr>
+          </tbody>
+        </table>
+        <h3 data-i18n="responseExample">Response Example</h3>
+        <pre>{
+  "data": [
+    {
+      "id": 1001,
+      "run_id": 42,
+      "file_path": "/data/data_downloads/utf8/20260410/tokyo.csv",
+      "rows_total": 2000,
+      "rows_ok": 1998,
+      "rows_error": 2,
+      "status": "success"
+    }
+  ],
+  "meta": {
+    "limit": 100,
+    "offset": 0,
+    "total": 1
+  }
+}</pre>
       </div>
     </div>
 
     <div class="card">
       <h2 data-i18n="errorTitle">Error Response Format</h2>
+      <p class="muted" data-i18n="requiredParamNote">Missing required query parameters return INVALID_ARGUMENT with the parameter names listed in the message.</p>
       <pre>{
   "error": {
     "code": "INVALID_ARGUMENT",
-    "message": "date format must be YYYY-MM-DD"
+    "message": "missing required query parameter: item_code"
   }
 }</pre>
       <table>
@@ -443,6 +625,7 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
         llmDoc: "<strong>LLM Doc:</strong> <a href=\"/doc-llm\" target=\"_blank\" rel=\"noreferrer\"><code>/doc-llm</code></a> (OpenAI/LLM-friendly JSON)",
         dataSource: "<strong>Data source:</strong> MAFF wholesale market data portal (<code>seisen.maff.go.jp</code>).",
         attributionNote: "Data rights and usage conditions belong to the original provider. This API is an independent implementation.",
+        metaNote: "Response meta includes total row counts and optional paging fields (limit/offset). Some endpoints add extra fields like latest_trade_date, group_by, or metric.",
         rule1: "<code>date/from/to</code>: YYYY-MM-DD",
         rule2: "from~to max 366 days",
         rule3: "code max length 32",
@@ -455,13 +638,13 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
         dashboardDesc: "Monitoring dashboard HTML page.",
         snapshotDesc: "CSV snapshots used by lightweight monitoring dashboard.",
         dimensionTitle: "Dimension APIs",
-        coverageDesc: "Returns current data coverage.",
+        coverageDesc: "Returns current data coverage (fact_rows_total is an estimated value from PostgreSQL statistics).",
         dimensionDesc: "List dimension rows (same parameter rules apply to markets/items/origins).",
         priceTitle: "Price APIs",
-        dailyDesc: "Raw daily fact rows with optional filters and paging.",
-        latestDesc: "Returns rows for the latest available trade date, optionally filtered by market/item/origin.",
-        trendDesc: "Trend aggregation by date.",
-        summaryDesc: "Summary aggregation by day/week/month buckets.",
+        dailyDesc: "Raw daily fact rows for a required item_code with optional filters and paging. If date/from/to are all omitted, default from=today-31d is applied.",
+        latestDesc: "Returns rows for the latest available trade date for a required item_code. date, from, and to are not supported.",
+        trendDesc: "Trend aggregation by date for a required item_code. If date/from/to are all omitted, default from=today-31d is applied.",
+        summaryDesc: "Summary aggregation by day/week/month buckets for a required item_code. If date/from/to are all omitted, default from=today-31d is applied.",
         compareRankTitle: "Compare / Ranking APIs",
         compareDesc: "Compare markets for the same date and item.",
         rankingDesc: "Rank items for a date by arrival or price_mid.",
@@ -471,6 +654,7 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
         errMethod: "HTTP method is not supported for endpoint",
         errDbReady: "Database readiness check failed",
         errDb: "Database query/count execution failed",
+        requiredParamNote: "Missing required query parameters return INVALID_ARGUMENT with the parameter names listed in the message.",
         parameters: "Parameters",
         requestExample: "Request Example",
         responseExample: "Response Example"
@@ -486,6 +670,7 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
         llmDoc: "<strong>LLM Doc:</strong> <a href=\"/doc-llm\" target=\"_blank\" rel=\"noreferrer\"><code>/doc-llm</code></a> (OpenAI/LLM 向け JSON)",
         dataSource: "<strong>データソース:</strong> MAFF 卸売市場データポータル (<code>seisen.maff.go.jp</code>)。",
         attributionNote: "データの権利および利用条件は提供元に帰属します。本APIは独立した実装です。",
+        metaNote: "レスポンスの meta には合計件数(total) と必要に応じて limit/offset が含まれます。エンドポイントにより latest_trade_date / group_by / metric などが追加されます。",
         rule1: "<code>date/from/to</code>: YYYY-MM-DD",
         rule2: "from~to は最大 366 日",
         rule3: "コード長は最大 32",
@@ -498,13 +683,13 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
         dashboardDesc: "監視ダッシュボード HTML。",
         snapshotDesc: "軽量監視で使うスナップショット CSV。",
         dimensionTitle: "ディメンション API",
-        coverageDesc: "現在のデータ範囲を返します。",
+        coverageDesc: "現在のデータ範囲を返します（fact_rows_total は PostgreSQL 統計に基づく推定値です）。",
         dimensionDesc: "コード/名称マスタ一覧（markets/items/origins で同じルール）。",
         priceTitle: "価格 API",
-        dailyDesc: "日次の生データ行を取得（フィルタ/ページング可）。",
-        latestDesc: "利用可能な最新取引日の行を返します。市場・品目・産地で絞り込み可能です。",
-        trendDesc: "日別トレンド集計。",
-        summaryDesc: "day/week/month 単位の集計。",
+        dailyDesc: "必須の item_code に対する日次の生データ行を取得します（フィルタ/ページング可）。date/from/to を省略した場合、from=today-31d が自動適用されます。",
+        latestDesc: "必須の item_code に対する最新取引日の行を返します。date/from/to は使用できません。",
+        trendDesc: "必須の item_code に対する日別トレンド集計。date/from/to を省略した場合、from=today-31d が自動適用されます。",
+        summaryDesc: "必須の item_code に対する day/week/month 単位の集計。date/from/to を省略した場合、from=today-31d が自動適用されます。",
         compareRankTitle: "比較 / ランキング API",
         compareDesc: "同じ日付・品目で市場比較。",
         rankingDesc: "指定日の品目ランキング。",
@@ -514,6 +699,7 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
         errMethod: "このエンドポイントでHTTPメソッドが未対応",
         errDbReady: "DB準備確認失敗",
         errDb: "DBクエリ/件数取得の実行失敗",
+        requiredParamNote: "必須パラメータ不足時は INVALID_ARGUMENT を返し、メッセージに不足パラメータ名が含まれます。",
         parameters: "パラメータ",
         requestExample: "リクエスト例",
         responseExample: "レスポンス例"
@@ -529,6 +715,7 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
         llmDoc: "<strong>LLM Doc:</strong> <a href=\"/doc-llm\" target=\"_blank\" rel=\"noreferrer\"><code>/doc-llm</code></a> (OpenAI/LLM 친화 JSON)",
         dataSource: "<strong>데이터 출처:</strong> MAFF 도매시장 데이터 포털 (<code>seisen.maff.go.jp</code>).",
         attributionNote: "데이터 권리와 이용 조건은 원 제공자에 귀속됩니다. 본 API는 독립 구현입니다.",
+        metaNote: "응답 meta에는 총 건수(total)와 필요 시 limit/offset이 포함됩니다. 엔드포인트에 따라 latest_trade_date, group_by, metric 등이 추가될 수 있습니다.",
         rule1: "<code>date/from/to</code>: YYYY-MM-DD",
         rule2: "from~to 최대 366일",
         rule3: "코드 길이 최대 32",
@@ -541,13 +728,13 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
         dashboardDesc: "모니터링 대시보드 HTML.",
         snapshotDesc: "경량 모니터링용 CSV 스냅샷.",
         dimensionTitle: "차원(Dimension) API",
-        coverageDesc: "현재 데이터 범위를 반환합니다.",
+        coverageDesc: "현재 데이터 범위를 반환합니다 (fact_rows_total은 PostgreSQL 통계 기반 추정치).",
         dimensionDesc: "코드/이름 목록 조회 (markets/items/origins 동일 규칙).",
         priceTitle: "가격 API",
-        dailyDesc: "일별 원시 데이터 조회 (필터/페이징 가능).",
-        latestDesc: "사용 가능한 최신 거래일의 행을 반환합니다. 시장/품목/원산지 필터를 지원합니다.",
-        trendDesc: "날짜별 추이 집계.",
-        summaryDesc: "day/week/month 집계.",
+        dailyDesc: "필수 item_code 기준 일별 원시 데이터 조회 (필터/페이징 가능). date/from/to를 모두 생략하면 from=today-31d가 자동 적용됩니다.",
+        latestDesc: "필수 item_code 기준 최신 거래일의 행을 반환합니다. date/from/to는 지원하지 않습니다.",
+        trendDesc: "필수 item_code 기준 날짜별 추이 집계. date/from/to를 모두 생략하면 from=today-31d가 자동 적용됩니다.",
+        summaryDesc: "필수 item_code 기준 day/week/month 집계. date/from/to를 모두 생략하면 from=today-31d가 자동 적용됩니다.",
         compareRankTitle: "비교 / 랭킹 API",
         compareDesc: "같은 날짜/품목 기준 시장 비교.",
         rankingDesc: "특정 날짜 품목 랭킹.",
@@ -557,6 +744,7 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
         errMethod: "해당 엔드포인트에서 허용되지 않은 메서드",
         errDbReady: "DB 준비 상태 확인 실패",
         errDb: "DB 조회/카운트 실행 실패",
+        requiredParamNote: "필수 파라미터가 누락되면 INVALID_ARGUMENT를 반환하며, 메시지에 누락된 파라미터 이름이 포함됩니다.",
         parameters: "파라미터",
         requestExample: "요청 예시",
         responseExample: "응답 예시"

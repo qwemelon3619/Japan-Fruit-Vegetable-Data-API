@@ -10,20 +10,25 @@ import (
 )
 
 const (
-	maxDateRangeDays = 366
-	maxCodeLength    = 32
-	maxSearchLength  = 100
+	maxDateRangeDays  = 366
+	maxCodeLength     = 32
+	maxSearchLength   = 100
+	defaultRecentDays = 31
 )
 
-func buildPriceFilters(r *http.Request, includeSingleDate bool) (string, []any, error) {
+func buildPriceFilters(r *http.Request, includeSingleDate bool) (string, []any, *string, error) {
 	q := r.URL.Query()
 	clauses := make([]string, 0, 8)
 	args := make([]any, 0, 8)
+	var defaultFrom *string
+	date := strings.TrimSpace(q.Get("date"))
+	from := strings.TrimSpace(q.Get("from"))
+	to := strings.TrimSpace(q.Get("to"))
 
 	if includeSingleDate {
-		if date := strings.TrimSpace(q.Get("date")); date != "" {
+		if date != "" {
 			if _, err := mustParseDate(date, "date"); err != nil {
-				return "", nil, err
+				return "", nil, nil, err
 			}
 			clauses = append(clauses, "f.trade_date = ?")
 			args = append(args, date)
@@ -31,27 +36,71 @@ func buildPriceFilters(r *http.Request, includeSingleDate bool) (string, []any, 
 	}
 
 	var fromDate, toDate *time.Time
-	if from := strings.TrimSpace(q.Get("from")); from != "" {
+	if from != "" {
 		d, err := mustParseDate(from, "from")
 		if err != nil {
-			return "", nil, err
+			return "", nil, nil, err
 		}
 		fromDate = &d
 		clauses = append(clauses, "f.trade_date >= ?")
 		args = append(args, from)
 	}
-	if to := strings.TrimSpace(q.Get("to")); to != "" {
+	if to != "" {
 		d, err := mustParseDate(to, "to")
 		if err != nil {
-			return "", nil, err
+			return "", nil, nil, err
 		}
 		toDate = &d
 		clauses = append(clauses, "f.trade_date <= ?")
 		args = append(args, to)
 	}
 	if err := validateDateRange(fromDate, toDate); err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
+
+	if date == "" && fromDate == nil && toDate == nil {
+		df := time.Now().AddDate(0, 0, -defaultRecentDays).Format("2006-01-02")
+		defaultFrom = &df
+		clauses = append(clauses, "f.trade_date >= ?")
+		args = append(args, df)
+	}
+
+	if v := strings.TrimSpace(q.Get("market_code")); v != "" {
+		if err := validateCode("market_code", v); err != nil {
+			return "", nil, nil, err
+		}
+		clauses = append(clauses, "m.market_code = ?")
+		args = append(args, v)
+	}
+	if v := strings.TrimSpace(q.Get("item_code")); v != "" {
+		if err := validateCode("item_code", v); err != nil {
+			return "", nil, nil, err
+		}
+		clauses = append(clauses, "i.item_code = ?")
+		args = append(args, v)
+	}
+	if v := strings.TrimSpace(q.Get("origin_code")); v != "" {
+		if err := validateCode("origin_code", v); err != nil {
+			return "", nil, nil, err
+		}
+		clauses = append(clauses, "o.origin_code = ?")
+		args = append(args, v)
+	}
+
+	if len(clauses) == 0 {
+		return "", args, defaultFrom, nil
+	}
+	return "WHERE " + strings.Join(clauses, " AND "), args, defaultFrom, nil
+}
+
+func buildLatestFilters(r *http.Request) (string, []any, error) {
+	q := r.URL.Query()
+	if strings.TrimSpace(q.Get("date")) != "" || strings.TrimSpace(q.Get("from")) != "" || strings.TrimSpace(q.Get("to")) != "" {
+		return "", nil, errors.New("date, from, and to are not supported for this endpoint")
+	}
+
+	clauses := make([]string, 0, 3)
+	args := make([]any, 0, 3)
 
 	if v := strings.TrimSpace(q.Get("market_code")); v != "" {
 		if err := validateCode("market_code", v); err != nil {

@@ -12,7 +12,8 @@
     "date_format": "YYYY-MM-DD",
     "max_date_range_days": 366,
     "max_code_length": 32,
-    "max_search_length": 100
+    "max_search_length": 100,
+    "default_recent_days_without_date_filters": 31
   },
   "data_source": {
     "name": "MAFF wholesale market data portal",
@@ -31,7 +32,7 @@
     {
       "path": "/ready",
       "method": "GET",
-      "summary": "Readiness check including recent database status verification.",
+      "summary": "Readiness check with a short-lived cached database ping result.",
       "response": {
         "data.status": "ready"
       }
@@ -39,23 +40,66 @@
     {
       "path": "/metrics",
       "method": "GET",
-      "summary": "Prometheus plaintext metrics."
+      "summary": "Prometheus plaintext metrics.",
+      "response_example": "# HELP http_requests_total Total number of HTTP requests\n# TYPE http_requests_total counter\nhttp_requests_total{method=\"GET\",path=\"/ready\",status=\"2xx\"} 12"
+    },
+    {
+      "path": "/monitoring/dashboard",
+      "method": "GET",
+      "summary": "Returns the monitoring dashboard HTML page.",
+      "response_example": "<!doctype html><html lang=\"en\"><head>...</head><body>Monitoring dashboard</body></html>"
+    },
+    {
+      "path": "/monitoring/snapshots.csv",
+      "method": "GET",
+      "summary": "Returns the monitoring CSV snapshot file from the configured snapshot path.",
+      "response_example": "timestamp,ready_ok,http_total,http_5xx,db_errors_total,http_p95_ms,ingestion_latest_status\n2026-04-12T08:17:29Z,1,5,0,0,10,success"
     },
     {
       "path": "/v1/coverage",
       "method": "GET",
-      "summary": "Returns available fact table coverage.",
+      "summary": "Returns available fact table coverage. fact_rows_total is an estimate from PostgreSQL statistics.",
       "example": "GET /v1/coverage",
+      "response_example": {
+        "data": {
+          "earliest_trade_date": "2021-04-08",
+          "latest_trade_date": "2026-04-10",
+          "fact_rows_total": 123456,
+          "last_ingestion_run_id": 42,
+          "last_ingestion_status": "success",
+          "last_ingestion_run_type": "daily",
+          "last_ingestion_finished_at": "2026-04-10T01:23:45Z"
+        },
+        "meta": {}
+      },
       "response_fields": [
         "earliest_trade_date",
         "latest_trade_date",
-        "fact_rows_total"
+        "fact_rows_total",
+        "last_ingestion_run_id",
+        "last_ingestion_status",
+        "last_ingestion_run_type",
+        "last_ingestion_finished_at"
       ]
     },
     {
       "path": "/v1/markets",
       "method": "GET",
       "summary": "Lists market dimension rows.",
+      "response_example": {
+        "data": [
+          {
+            "id": 1,
+            "code": "13300",
+            "name": "Tokyo"
+          }
+        ],
+        "meta": {
+          "limit": 20,
+          "offset": 0,
+          "total": 1
+        }
+      },
       "query": {
         "limit": "int, optional, 1..500",
         "offset": "int, optional, >= 0",
@@ -68,6 +112,20 @@
       "path": "/v1/items",
       "method": "GET",
       "summary": "Lists item dimension rows.",
+      "response_example": {
+        "data": [
+          {
+            "id": 1,
+            "code": "30100",
+            "name": "Daikon"
+          }
+        ],
+        "meta": {
+          "limit": 20,
+          "offset": 0,
+          "total": 1
+        }
+      },
       "query": {
         "limit": "int, optional, 1..500",
         "offset": "int, optional, >= 0",
@@ -80,6 +138,20 @@
       "path": "/v1/origins",
       "method": "GET",
       "summary": "Lists origin dimension rows.",
+      "response_example": {
+        "data": [
+          {
+            "id": 1,
+            "code": "40100",
+            "name": "Hokkaido"
+          }
+        ],
+        "meta": {
+          "limit": 20,
+          "offset": 0,
+          "total": 1
+        }
+      },
       "query": {
         "limit": "int, optional, 1..500",
         "offset": "int, optional, >= 0",
@@ -91,30 +163,82 @@
     {
       "path": "/v1/prices/daily",
       "method": "GET",
-      "summary": "Returns raw daily price fact rows.",
+      "summary": "Returns raw daily price fact rows for a required item_code. If date/from/to are all omitted, from defaults to today-31 days.",
+      "response_example": {
+        "data": [
+          {
+            "trade_date": "2026-04-10",
+            "weekday_ja": "金",
+            "market_code": "13300",
+            "market_name": "Tokyo",
+            "item_code": "30100",
+            "item_name": "Daikon",
+            "origin_code": "40100",
+            "origin_name": "Hokkaido",
+            "grade": "A",
+            "class": "L",
+            "product_name": "Daikon",
+            "unit_weight": "10kg",
+            "item_total_ton": 18.4,
+            "arrival_ton": 2.3,
+            "price_high_yen": 2800,
+            "price_mid_yen": 2480,
+            "price_low_yen": 2100,
+            "trend_label": "steady",
+            "source_file": "20260410_tokyo.csv",
+            "source_row_no": 128
+          }
+        ],
+        "meta": {
+          "limit": 10,
+          "offset": 0,
+          "total": 1
+        }
+      },
       "query": {
         "date": "string, optional, YYYY-MM-DD",
         "from": "string, optional, YYYY-MM-DD",
         "to": "string, optional, YYYY-MM-DD",
         "market_code": "string, optional",
-        "item_code": "string, optional",
+        "item_code": "string, required",
         "origin_code": "string, optional",
         "limit": "int, optional, 1..2000",
         "offset": "int, optional, >= 0",
         "sort": "string, optional: trade_date|market_code|item_code|origin_code|price_mid|arrival",
         "order": "string, optional: asc|desc"
-      }
+      },
+      "meta_fields": [
+        "limit",
+        "offset",
+        "total",
+        "default_from (present when auto-applied)",
+        "default_window_days (present when auto-applied)"
+      ]
     },
     {
       "path": "/v1/prices/latest",
       "method": "GET",
-      "summary": "Returns rows for the latest available trade date, optionally filtered by market/item/origin.",
+      "summary": "Returns rows for the latest available trade date for a required item_code. date, from, and to are not supported.",
       "example": "GET /v1/prices/latest?item_code=30100&limit=10",
+      "response_example": {
+        "data": [
+          {
+            "trade_date": "2026-04-10",
+            "market_code": "13300",
+            "item_code": "30100",
+            "price_mid_yen": 2480
+          }
+        ],
+        "meta": {
+          "latest_trade_date": "2026-04-10",
+          "limit": 10,
+          "offset": 0,
+          "total": 1
+        }
+      },
       "query": {
-        "from": "string, optional, YYYY-MM-DD",
-        "to": "string, optional, YYYY-MM-DD",
         "market_code": "string, optional",
-        "item_code": "string, optional",
+        "item_code": "string, required",
         "origin_code": "string, optional",
         "limit": "int, optional, 1..2000",
         "offset": "int, optional, >= 0",
@@ -131,32 +255,161 @@
     {
       "path": "/v1/prices/trend",
       "method": "GET",
-      "summary": "Aggregates trend by trade date.",
+      "summary": "Aggregates trend by trade date for a required item_code. If date/from/to are all omitted, from defaults to today-31 days.",
+      "response_example": {
+        "data": [
+          {
+            "trade_date": "2026-04-01",
+            "rows_count": 12,
+            "avg_price_mid_yen": 2510.5,
+            "max_price_mid_yen": 3000,
+            "min_price_mid_yen": 2000,
+            "arrival_ton_sum": 14.2
+          }
+        ],
+        "meta": {
+          "total": 1
+        }
+      },
       "query": {
         "from": "string, optional, YYYY-MM-DD",
         "to": "string, optional, YYYY-MM-DD",
         "market_code": "string, optional",
-        "item_code": "string, optional",
+        "item_code": "string, required",
+        "origin_code": "string, optional"
+      },
+      "meta_fields": [
+        "rows",
+        "default_from (present when auto-applied)",
+        "default_window_days (present when auto-applied)"
+      ]
+    },
+    {
+      "path": "/v1/prices/trend/1m",
+      "method": "GET",
+      "summary": "Same output as /v1/prices/trend with from/to automatically set to the last 1 month.",
+      "response_example": {
+        "data": [
+          {
+            "trade_date": "2026-04-01",
+            "rows_count": 12,
+            "avg_price_mid_yen": 2510.5,
+            "max_price_mid_yen": 3000,
+            "min_price_mid_yen": 2000,
+            "arrival_ton_sum": 14.2
+          }
+        ],
+        "meta": {
+          "total": 1
+        }
+      },
+      "query": {
+        "market_code": "string, optional",
+        "item_code": "string, required",
+        "origin_code": "string, optional"
+      }
+    },
+    {
+      "path": "/v1/prices/trend/6m",
+      "method": "GET",
+      "summary": "Same output as /v1/prices/trend with from/to automatically set to the last 6 months.",
+      "response_example": {
+        "data": [
+          {
+            "trade_date": "2026-04-01",
+            "rows_count": 12,
+            "avg_price_mid_yen": 2510.5,
+            "max_price_mid_yen": 3000,
+            "min_price_mid_yen": 2000,
+            "arrival_ton_sum": 14.2
+          }
+        ],
+        "meta": {
+          "total": 1
+        }
+      },
+      "query": {
+        "market_code": "string, optional",
+        "item_code": "string, required",
+        "origin_code": "string, optional"
+      }
+    },
+    {
+      "path": "/v1/prices/trend/1y",
+      "method": "GET",
+      "summary": "Same output as /v1/prices/trend with from/to automatically set to the last 1 year.",
+      "response_example": {
+        "data": [
+          {
+            "trade_date": "2026-04-01",
+            "rows_count": 12,
+            "avg_price_mid_yen": 2510.5,
+            "max_price_mid_yen": 3000,
+            "min_price_mid_yen": 2000,
+            "arrival_ton_sum": 14.2
+          }
+        ],
+        "meta": {
+          "total": 1
+        }
+      },
+      "query": {
+        "market_code": "string, optional",
+        "item_code": "string, required",
         "origin_code": "string, optional"
       }
     },
     {
       "path": "/v1/prices/summary",
       "method": "GET",
-      "summary": "Aggregates summary by day, week, or month.",
+      "summary": "Aggregates summary by day, week, or month for a required item_code. If date/from/to are all omitted, from defaults to today-31 days.",
+      "response_example": {
+        "data": [
+          {
+            "period": "2026-04",
+            "rows_count": 120,
+            "avg_price_mid_yen": 2440.3,
+            "arrival_ton_sum": 181.6
+          }
+        ],
+        "meta": {
+          "group_by": "month",
+          "total": 1
+        }
+      },
       "query": {
         "group_by": "string, optional: day|week|month",
         "from": "string, optional, YYYY-MM-DD",
         "to": "string, optional, YYYY-MM-DD",
         "market_code": "string, optional",
-        "item_code": "string, optional",
+        "item_code": "string, required",
         "origin_code": "string, optional"
-      }
+      },
+      "meta_fields": [
+        "group_by",
+        "rows",
+        "default_from (present when auto-applied)",
+        "default_window_days (present when auto-applied)"
+      ]
     },
     {
       "path": "/v1/compare/markets",
       "method": "GET",
       "summary": "Compares markets for a single date and item.",
+      "response_example": {
+        "data": [
+          {
+            "market_code": "13300",
+            "market_name": "Tokyo",
+            "rows_count": 8,
+            "metric_value": 2480.5
+          }
+        ],
+        "meta": {
+          "metric": "price_mid",
+          "rows": 1
+        }
+      },
       "query": {
         "date": "string, required, YYYY-MM-DD",
         "item_code": "string, required",
@@ -168,12 +421,80 @@
       "path": "/v1/rankings/items",
       "method": "GET",
       "summary": "Ranks items for a date by arrival or price_mid.",
+      "response_example": {
+        "data": [
+          {
+            "item_code": "30100",
+            "item_name": "Daikon",
+            "rows_count": 14,
+            "metric_value": 42.7
+          }
+        ],
+        "meta": {
+          "metric": "arrival",
+          "limit": 20,
+          "rows": 1
+        }
+      },
       "query": {
         "date": "string, required, YYYY-MM-DD",
         "metric": "string, optional: arrival|price_mid",
         "market_code": "string, optional",
         "limit": "int, optional, 1..500",
         "order": "string, optional: asc|desc"
+      }
+    },
+    {
+      "path": "/ingestion/runs",
+      "method": "GET",
+      "summary": "Lists ingestion runs in descending id order.",
+      "response_example": {
+        "data": [
+          {
+            "id": 42,
+            "run_type": "daily",
+            "status": "success",
+            "started_at": "2026-04-10T01:00:00Z",
+            "finished_at": "2026-04-10T01:23:45Z"
+          }
+        ],
+        "meta": {
+          "limit": 50,
+          "offset": 0,
+          "total": 1
+        }
+      },
+      "query": {
+        "limit": "int, optional, 1..500",
+        "offset": "int, optional, >= 0"
+      }
+    },
+    {
+      "path": "/ingestion/files",
+      "method": "GET",
+      "summary": "Lists ingestion files in descending id order, optionally filtered by run_id.",
+      "response_example": {
+        "data": [
+          {
+            "id": 1001,
+            "run_id": 42,
+            "file_path": "/data/data_downloads/utf8/20260410/tokyo.csv",
+            "rows_total": 2000,
+            "rows_ok": 1998,
+            "rows_error": 2,
+            "status": "success"
+          }
+        ],
+        "meta": {
+          "limit": 100,
+          "offset": 0,
+          "total": 1
+        }
+      },
+      "query": {
+        "run_id": "int, optional, positive integer",
+        "limit": "int, optional, 1..1000",
+        "offset": "int, optional, >= 0"
       }
     }
   ],

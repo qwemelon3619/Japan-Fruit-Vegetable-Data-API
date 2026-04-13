@@ -103,6 +103,85 @@ Production deployments for this project additionally enforce access control and 
   - `GET /v1/compare/markets`
   - `GET /v1/rankings/items`
 
+## Endpoint Behavior Summary
+
+### System and Monitoring
+- `GET /health`: liveness check, returns `{ "data": { "status": "ok" } }`
+- `GET /ready`: readiness check backed by a cached database ping result
+- `GET /metrics`: Prometheus plaintext metrics
+- `GET /monitoring/dashboard`: monitoring dashboard HTML
+- `GET /monitoring/snapshots.csv`: monitoring CSV snapshot file from the configured snapshot path
+
+### Dimension APIs
+- `GET /v1/markets`, `GET /v1/items`, `GET /v1/origins`
+  - Query: `limit` (default `50`, max `500`), `offset`, `q`, `sort`, `order`
+  - `q` searches code/name with `LIKE`
+  - Response `meta`: `limit`, `offset`, `total`
+
+### Coverage API
+- `GET /v1/coverage`
+  - Returns `earliest_trade_date`, `latest_trade_date`, `fact_rows_total`
+  - Also includes latest ingestion metadata when available:
+    - `last_ingestion_run_id`
+    - `last_ingestion_status`
+    - `last_ingestion_run_type`
+    - `last_ingestion_finished_at`
+
+### Price APIs
+- `GET /v1/prices/daily`
+  - Required: `item_code`
+  - Optional: `date`, `from`, `to`, `market_code`, `origin_code`, `limit`, `offset`, `sort`, `order`
+  - `date` is supported only on this endpoint among the main price list/aggregate APIs
+  - If `date/from/to` are all omitted, a default recent filter is applied with `from = today - 31 days`
+  - Response `meta`: `limit`, `offset`, `total`, and `default_from` / `default_window_days` when auto-applied
+
+- `GET /v1/prices/latest`
+  - Required: `item_code`
+  - Optional: `market_code`, `origin_code`, `limit`, `offset`, `sort`, `order`
+  - Not supported: `date`, `from`, `to`
+  - Returns rows only for the latest available trade date matching the non-date filters
+  - Response `meta`: `latest_trade_date`, `limit`, `offset`, `total`
+
+- `GET /v1/prices/trend`
+  - Required: `item_code`
+  - Optional: `from`, `to`, `market_code`, `origin_code`
+  - Aggregates by `trade_date`
+  - Response fields include `rows_count`, `avg_price_mid_yen`, `max_price_mid_yen`, `min_price_mid_yen`, `arrival_ton_sum`
+  - If `date/from/to` are all omitted, a default recent filter is applied with `from = today - 31 days`
+  - Preset routes:
+    - `GET /v1/prices/trend/1m`
+    - `GET /v1/prices/trend/6m`
+    - `GET /v1/prices/trend/1y`
+
+- `GET /v1/prices/summary`
+  - Required: `item_code`
+  - Optional: `group_by=day|week|month`, `from`, `to`, `market_code`, `origin_code`
+  - Aggregates by `period`
+  - Response fields include `rows_count`, `avg_price_mid_yen`, `arrival_ton_sum`
+  - If `date/from/to` are all omitted, a default recent filter is applied with `from = today - 31 days`
+
+### Compare and Ranking APIs
+- `GET /v1/compare/markets`
+  - Required: `date`, `item_code`
+  - Optional: `metric=price_mid|arrival`, `order`
+  - Default metric: `price_mid`
+
+- `GET /v1/rankings/items`
+  - Required: `date`
+  - Optional: `metric=arrival|price_mid`, `market_code`, `limit`, `order`
+  - Default metric: `arrival`
+  - `limit` default `50`, max `500`
+
+### Ingestion Admin APIs
+- `GET /ingestion/runs`
+  - Optional: `limit` (default `50`, max `500`), `offset`
+  - Returns ingestion runs ordered by `id DESC`
+
+- `GET /ingestion/files`
+  - Optional: `run_id`, `limit` (default `100`, max `1000`), `offset`
+  - `run_id` must be a positive integer when provided
+  - Returns ingestion files ordered by `id DESC`
+
 ## Deployment Notes
 - `japan-data-api` must run with `command: "api"` so the API process stays up
 - `japan-data-pipeline-cron` must run with `command: "start-cron.sh"` so cron stays up in foreground
@@ -136,7 +215,10 @@ Production deployments for this project additionally enforce access control and 
 - `no market table rows` can be normal on holidays, weekends, or dates not published by the source portal
 - If a target date has no published data, the downloader skips that date and ingest is skipped for that date as well
 - Monitoring CSV snapshots are generated on a separate cron schedule and do not require daily ingest to succeed
-- `SELECT COUNT(*)` on large fact tables can be slow because PostgreSQL may scan the full table for an exact count
+- `/v1/coverage` returns `fact_rows_total` as a PostgreSQL statistics-based estimate (not exact full-table count) to avoid heavy `COUNT(*)` scans on large tables
+- `/v1/prices/daily`, `/v1/prices/trend`, and `/v1/prices/summary` apply a default recent-date filter (`from = today - 31 days`) when `date/from/to` are all omitted
+- `/v1/prices/latest` always returns rows from the latest available trade date for the requested non-date filters and does not support `date`, `from`, or `to`
+- When the default recent-date filter is auto-applied, response `meta` includes `default_from` and `default_window_days`
 
 ## Example Queries
 ```bash

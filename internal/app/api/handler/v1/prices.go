@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -23,11 +24,23 @@ func (h *Service) handleCoverage(w http.ResponseWriter, r *http.Request) {
 	if err := h.observeDB("coverage_fact_summary", func() error {
 		return h.db.WithContext(ctx).Raw(`
 SELECT
-	MIN(to_char(trade_date, 'YYYY-MM-DD')) AS earliest_trade_date,
-	MAX(to_char(trade_date, 'YYYY-MM-DD')) AS latest_trade_date,
-	COUNT(*) AS fact_rows_total
+	to_char(MIN(trade_date), 'YYYY-MM-DD') AS earliest_trade_date,
+	to_char(MAX(trade_date), 'YYYY-MM-DD') AS latest_trade_date
 FROM fact_prices_daily
 `).Scan(&row).Error
+	}); err != nil {
+		writeErr(w, http.StatusInternalServerError, "DB_ERROR", "query failed")
+		return
+	}
+	if err := h.observeDB("coverage_fact_count_estimate", func() error {
+		return h.db.WithContext(ctx).Raw(`
+SELECT COALESCE(
+	(SELECT GREATEST(reltuples, 0)::bigint
+	 FROM pg_class
+	 WHERE oid = 'fact_prices_daily'::regclass),
+	0
+) AS fact_rows_total
+`).Scan(&row.FactRowsTotal).Error
 	}); err != nil {
 		writeErr(w, http.StatusInternalServerError, "DB_ERROR", "query failed")
 		return
@@ -58,13 +71,17 @@ func (h *Service) handlePricesDaily(w http.ResponseWriter, r *http.Request) {
 		writeMethodNotAllowed(w)
 		return
 	}
+	if strings.TrimSpace(r.URL.Query().Get("item_code")) == "" {
+		writeMissingRequiredParams(w, "item_code")
+		return
+	}
 
 	limit := clampInt(parseIntOrDefault(r.URL.Query().Get("limit"), 100), 1, 2000)
 	offset := maxInt(parseIntOrDefault(r.URL.Query().Get("offset"), 0), 0)
 	sort := parseDailySort(r.URL.Query().Get("sort"))
 	order := parseOrder(r.URL.Query().Get("order"))
 
-	whereSQL, whereArgs, err := buildPriceFilters(r, true)
+	whereSQL, whereArgs, defaultFrom, err := buildPriceFilters(r, true)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "INVALID_ARGUMENT", err.Error())
 		return
@@ -132,12 +149,21 @@ JOIN dim_origin o ON o.id = f.origin_id
 		return
 	}
 
-	writeOK(w, rows, apiMeta{"limit": limit, "offset": offset, "total": total})
+	meta := apiMeta{"limit": limit, "offset": offset, "total": total}
+	if defaultFrom != nil {
+		meta["default_from"] = *defaultFrom
+		meta["default_window_days"] = defaultRecentDays
+	}
+	writeOK(w, rows, meta)
 }
 
 func (h *Service) handlePricesLatest(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeMethodNotAllowed(w)
+		return
+	}
+	if strings.TrimSpace(r.URL.Query().Get("item_code")) == "" {
+		writeMissingRequiredParams(w, "item_code")
 		return
 	}
 
@@ -146,7 +172,7 @@ func (h *Service) handlePricesLatest(w http.ResponseWriter, r *http.Request) {
 	sort := parseDailySort(r.URL.Query().Get("sort"))
 	order := parseOrder(r.URL.Query().Get("order"))
 
-	whereSQL, whereArgs, err := buildPriceFilters(r, false)
+	whereSQL, whereArgs, err := buildLatestFilters(r)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "INVALID_ARGUMENT", err.Error())
 		return
@@ -157,12 +183,14 @@ func (h *Service) handlePricesLatest(w http.ResponseWriter, r *http.Request) {
 
 	var latestTradeDate *string
 	latestDateQuery := `
-SELECT MAX(to_char(f.trade_date, 'YYYY-MM-DD')) AS latest_trade_date
+SELECT to_char(f.trade_date, 'YYYY-MM-DD') AS latest_trade_date
 FROM fact_prices_daily f
 JOIN dim_market m ON m.id = f.market_id
 JOIN dim_item i ON i.id = f.item_id
 JOIN dim_origin o ON o.id = f.origin_id
-` + whereSQL
+` + whereSQL + `
+ORDER BY f.trade_date DESC
+LIMIT 1`
 	if err := h.observeDB("prices_latest_trade_date", func() error {
 		return h.db.WithContext(ctx).Raw(latestDateQuery, whereArgs...).Scan(&latestTradeDate).Error
 	}); err != nil {
@@ -171,7 +199,8 @@ JOIN dim_origin o ON o.id = f.origin_id
 	}
 
 	if latestTradeDate == nil || strings.TrimSpace(*latestTradeDate) == "" {
-		writeOK(w, []dailyRow{}, apiMeta{"latest_trade_date": nil, "limit": limit, "offset": offset, "total": 0})
+		meta := apiMeta{"latest_trade_date": nil, "limit": limit, "offset": offset, "total": 0}
+		writeOK(w, []dailyRow{}, meta)
 		return
 	}
 
@@ -243,7 +272,8 @@ JOIN dim_origin o ON o.id = f.origin_id
 		return
 	}
 
-	writeOK(w, rows, apiMeta{"latest_trade_date": *latestTradeDate, "limit": limit, "offset": offset, "total": total})
+	meta := apiMeta{"latest_trade_date": *latestTradeDate, "limit": limit, "offset": offset, "total": total}
+	writeOK(w, rows, meta)
 }
 
 func (h *Service) handlePricesTrend(w http.ResponseWriter, r *http.Request) {
@@ -251,7 +281,11 @@ func (h *Service) handlePricesTrend(w http.ResponseWriter, r *http.Request) {
 		writeMethodNotAllowed(w)
 		return
 	}
-	whereSQL, whereArgs, err := buildPriceFilters(r, false)
+	if strings.TrimSpace(r.URL.Query().Get("item_code")) == "" {
+		writeMissingRequiredParams(w, "item_code")
+		return
+	}
+	whereSQL, whereArgs, defaultFrom, err := buildPriceFilters(r, false)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "INVALID_ARGUMENT", err.Error())
 		return
@@ -287,12 +321,55 @@ ORDER BY f.trade_date ASC`
 		rows[i].AvgPriceMid = roundFloatPtr2(rows[i].AvgPriceMid)
 		rows[i].ArrivalTon = roundFloatPtr2(rows[i].ArrivalTon)
 	}
-	writeOK(w, rows, apiMeta{"rows": len(rows)})
+	meta := apiMeta{"total": len(rows)}
+	if defaultFrom != nil {
+		meta["default_from"] = *defaultFrom
+		meta["default_window_days"] = defaultRecentDays
+	}
+	writeOK(w, rows, meta)
+}
+
+func (h *Service) handlePricesTrend1Month(w http.ResponseWriter, r *http.Request) {
+	h.handlePricesTrendPreset(w, r, 0, -1, 0)
+}
+
+func (h *Service) handlePricesTrend6Months(w http.ResponseWriter, r *http.Request) {
+	h.handlePricesTrendPreset(w, r, 0, -6, 0)
+}
+
+func (h *Service) handlePricesTrend1Year(w http.ResponseWriter, r *http.Request) {
+	h.handlePricesTrendPreset(w, r, -1, 0, 0)
+}
+
+func (h *Service) handlePricesTrendPreset(w http.ResponseWriter, r *http.Request, years, months, days int) {
+	if r.Method != http.MethodGet {
+		writeMethodNotAllowed(w)
+		return
+	}
+
+	now := time.Now()
+	cloned := r.Clone(r.Context())
+	cloned.URL = cloneURLWithTrendRange(r.URL, now.AddDate(years, months, days).Format("2006-01-02"), now.Format("2006-01-02"))
+	h.handlePricesTrend(w, cloned)
+}
+
+func cloneURLWithTrendRange(src *url.URL, from, to string) *url.URL {
+	cloned := *src
+	query := cloned.Query()
+	query.Del("date")
+	query.Set("from", from)
+	query.Set("to", to)
+	cloned.RawQuery = query.Encode()
+	return &cloned
 }
 
 func (h *Service) handlePricesSummary(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeMethodNotAllowed(w)
+		return
+	}
+	if strings.TrimSpace(r.URL.Query().Get("item_code")) == "" {
+		writeMissingRequiredParams(w, "item_code")
 		return
 	}
 	groupBy := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("group_by")))
@@ -313,7 +390,7 @@ func (h *Service) handlePricesSummary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	whereSQL, whereArgs, err := buildPriceFilters(r, false)
+	whereSQL, whereArgs, defaultFrom, err := buildPriceFilters(r, false)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "INVALID_ARGUMENT", err.Error())
 		return
@@ -347,7 +424,12 @@ ORDER BY period ASC`
 		rows[i].ArrivalTon = roundFloatPtr2(rows[i].ArrivalTon)
 	}
 
-	writeOK(w, rows, apiMeta{"group_by": groupBy, "rows": len(rows)})
+	meta := apiMeta{"group_by": groupBy, "total": len(rows)}
+	if defaultFrom != nil {
+		meta["default_from"] = *defaultFrom
+		meta["default_window_days"] = defaultRecentDays
+	}
+	writeOK(w, rows, meta)
 }
 
 func (h *Service) handleCompareMarkets(w http.ResponseWriter, r *http.Request) {
@@ -358,7 +440,7 @@ func (h *Service) handleCompareMarkets(w http.ResponseWriter, r *http.Request) {
 	date := strings.TrimSpace(r.URL.Query().Get("date"))
 	itemCode := strings.TrimSpace(r.URL.Query().Get("item_code"))
 	if date == "" || itemCode == "" {
-		writeErr(w, http.StatusBadRequest, "INVALID_ARGUMENT", "date and item_code are required")
+		writeMissingRequiredParams(w, "date", "item_code")
 		return
 	}
 	if _, err := mustParseDate(date, "date"); err != nil {
@@ -411,7 +493,7 @@ func (h *Service) handleCompareMarkets(w http.ResponseWriter, r *http.Request) {
 	for i := range rows {
 		rows[i].Metric = roundFloatPtr2(rows[i].Metric)
 	}
-	writeOK(w, rows, apiMeta{"metric": metric, "rows": len(rows)})
+	writeOK(w, rows, apiMeta{"metric": metric, "total": len(rows)})
 }
 
 func (h *Service) handleRankingsItems(w http.ResponseWriter, r *http.Request) {
@@ -421,7 +503,7 @@ func (h *Service) handleRankingsItems(w http.ResponseWriter, r *http.Request) {
 	}
 	date := strings.TrimSpace(r.URL.Query().Get("date"))
 	if date == "" {
-		writeErr(w, http.StatusBadRequest, "INVALID_ARGUMENT", "date is required")
+		writeMissingRequiredParams(w, "date")
 		return
 	}
 	if _, err := mustParseDate(date, "date"); err != nil {
@@ -489,7 +571,7 @@ LIMIT ?`
 	for i := range rows {
 		rows[i].Metric = roundFloatPtr2(rows[i].Metric)
 	}
-	writeOK(w, rows, apiMeta{"metric": metric, "limit": limit, "rows": len(rows)})
+	writeOK(w, rows, apiMeta{"metric": metric, "limit": limit, "total": len(rows)})
 }
 
 func roundFloatPtr2(v *float64) *float64 {
