@@ -81,6 +81,7 @@ Administrative access policy:
 /ingestion/runs
 /ingestion/files
 These routes should be restricted to administrators or internal access only.
+Production deployments for this project additionally enforce access control and rate limiting at Cloudflare and at the Nginx reverse proxy.
 ```
 
 ## API Highlights
@@ -108,6 +109,7 @@ These routes should be restricted to administrators or internal access only.
 - If `command` is omitted when using prebuilt images, the image default command runs a one-shot pipeline script and the container will exit normally
 - Reverse proxy, IP restriction, or Cloudflare rules are recommended for `/monitoring`, `/metrics`, and `/doc` in public deployments
 - Restrict `/doc`, `/doc-llm`, `/monitoring/*`, `/metrics`, `/ready`, and ingestion-related routes to administrators or internal networks
+- Production environment uses Cloudflare access controls and burst protection in addition to Nginx access rules
 
 ## Data Workflow
 1. `downloader` fetches source CSV files from the MAFF portal
