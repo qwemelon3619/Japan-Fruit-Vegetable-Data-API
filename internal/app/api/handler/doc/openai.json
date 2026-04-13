@@ -1,0 +1,194 @@
+{
+  "name": "Japan Fruit & Vegetable Data API",
+  "description": "Structured machine-readable API reference for Japanese wholesale fruit and vegetable market data.",
+  "base_url": "https://jp-vgfr-api.seungpyo.xyz",
+  "documentation_url": "https://jp-vgfr-api.seungpyo.xyz/doc",
+  "llm_documentation_url": "https://jp-vgfr-api.seungpyo.xyz/doc-llm",
+  "auth": {
+    "type": "none",
+    "notes": "Reverse proxy, network policy, or Cloudflare rules may restrict some routes by environment. Restrict /doc, /doc-llm, /ready, /metrics, /monitoring/dashboard, /monitoring/snapshots.csv, /ingestion/runs, and /ingestion/files to administrators or internal access."
+  },
+  "rules": {
+    "date_format": "YYYY-MM-DD",
+    "max_date_range_days": 366,
+    "max_code_length": 32,
+    "max_search_length": 100
+  },
+  "data_source": {
+    "name": "MAFF wholesale market data portal",
+    "url": "https://www.seisen.maff.go.jp/seisen/bs04b040md001/BS04B040UC010SC999-Evt001.do",
+    "attribution": "Data rights and usage conditions belong to the original provider."
+  },
+  "endpoints": [
+    {
+      "path": "/health",
+      "method": "GET",
+      "summary": "Liveness check for API process.",
+      "response": {
+        "data.status": "ok"
+      }
+    },
+    {
+      "path": "/ready",
+      "method": "GET",
+      "summary": "Readiness check including recent database status verification.",
+      "response": {
+        "data.status": "ready"
+      }
+    },
+    {
+      "path": "/metrics",
+      "method": "GET",
+      "summary": "Prometheus plaintext metrics."
+    },
+    {
+      "path": "/v1/coverage",
+      "method": "GET",
+      "summary": "Returns available fact table coverage.",
+      "example": "GET /v1/coverage",
+      "response_fields": [
+        "earliest_trade_date",
+        "latest_trade_date",
+        "fact_rows_total"
+      ]
+    },
+    {
+      "path": "/v1/markets",
+      "method": "GET",
+      "summary": "Lists market dimension rows.",
+      "query": {
+        "limit": "int, optional, 1..500",
+        "offset": "int, optional, >= 0",
+        "q": "string, optional, code/name search",
+        "sort": "string, optional: id|code|name",
+        "order": "string, optional: asc|desc"
+      }
+    },
+    {
+      "path": "/v1/items",
+      "method": "GET",
+      "summary": "Lists item dimension rows.",
+      "query": {
+        "limit": "int, optional, 1..500",
+        "offset": "int, optional, >= 0",
+        "q": "string, optional, code/name search",
+        "sort": "string, optional: id|code|name",
+        "order": "string, optional: asc|desc"
+      }
+    },
+    {
+      "path": "/v1/origins",
+      "method": "GET",
+      "summary": "Lists origin dimension rows.",
+      "query": {
+        "limit": "int, optional, 1..500",
+        "offset": "int, optional, >= 0",
+        "q": "string, optional, code/name search",
+        "sort": "string, optional: id|code|name",
+        "order": "string, optional: asc|desc"
+      }
+    },
+    {
+      "path": "/v1/prices/daily",
+      "method": "GET",
+      "summary": "Returns raw daily price fact rows.",
+      "query": {
+        "date": "string, optional, YYYY-MM-DD",
+        "from": "string, optional, YYYY-MM-DD",
+        "to": "string, optional, YYYY-MM-DD",
+        "market_code": "string, optional",
+        "item_code": "string, optional",
+        "origin_code": "string, optional",
+        "limit": "int, optional, 1..2000",
+        "offset": "int, optional, >= 0",
+        "sort": "string, optional: trade_date|market_code|item_code|origin_code|price_mid|arrival",
+        "order": "string, optional: asc|desc"
+      }
+    },
+    {
+      "path": "/v1/prices/latest",
+      "method": "GET",
+      "summary": "Returns rows for the latest available trade date, optionally filtered by market/item/origin.",
+      "example": "GET /v1/prices/latest?item_code=30100&limit=10",
+      "query": {
+        "from": "string, optional, YYYY-MM-DD",
+        "to": "string, optional, YYYY-MM-DD",
+        "market_code": "string, optional",
+        "item_code": "string, optional",
+        "origin_code": "string, optional",
+        "limit": "int, optional, 1..2000",
+        "offset": "int, optional, >= 0",
+        "sort": "string, optional: trade_date|market_code|item_code|origin_code|price_mid|arrival",
+        "order": "string, optional: asc|desc"
+      },
+      "meta_fields": [
+        "latest_trade_date",
+        "limit",
+        "offset",
+        "total"
+      ]
+    },
+    {
+      "path": "/v1/prices/trend",
+      "method": "GET",
+      "summary": "Aggregates trend by trade date.",
+      "query": {
+        "from": "string, optional, YYYY-MM-DD",
+        "to": "string, optional, YYYY-MM-DD",
+        "market_code": "string, optional",
+        "item_code": "string, optional",
+        "origin_code": "string, optional"
+      }
+    },
+    {
+      "path": "/v1/prices/summary",
+      "method": "GET",
+      "summary": "Aggregates summary by day, week, or month.",
+      "query": {
+        "group_by": "string, optional: day|week|month",
+        "from": "string, optional, YYYY-MM-DD",
+        "to": "string, optional, YYYY-MM-DD",
+        "market_code": "string, optional",
+        "item_code": "string, optional",
+        "origin_code": "string, optional"
+      }
+    },
+    {
+      "path": "/v1/compare/markets",
+      "method": "GET",
+      "summary": "Compares markets for a single date and item.",
+      "query": {
+        "date": "string, required, YYYY-MM-DD",
+        "item_code": "string, required",
+        "metric": "string, optional: price_mid|arrival",
+        "order": "string, optional: asc|desc"
+      }
+    },
+    {
+      "path": "/v1/rankings/items",
+      "method": "GET",
+      "summary": "Ranks items for a date by arrival or price_mid.",
+      "query": {
+        "date": "string, required, YYYY-MM-DD",
+        "metric": "string, optional: arrival|price_mid",
+        "market_code": "string, optional",
+        "limit": "int, optional, 1..500",
+        "order": "string, optional: asc|desc"
+      }
+    }
+  ],
+  "error_format": {
+    "shape": {
+      "error": {
+        "code": "string",
+        "message": "string"
+      }
+    },
+    "codes": [
+      "INVALID_ARGUMENT",
+      "METHOD_NOT_ALLOWED",
+      "DB_NOT_READY",
+      "DB_ERROR"
+    ]
+  }
+}

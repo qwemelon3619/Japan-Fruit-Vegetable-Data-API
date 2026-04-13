@@ -10,5 +10,5 @@ func NewService() *Service {
 
 func (s *Service) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/doc", s.handleDoc)
+	mux.HandleFunc("/doc-llm", s.handleDocLLM)
 }
-

@@ -19,17 +19,40 @@ func (h *Service) handleReady(w http.ResponseWriter, r *http.Request) {
 		writeMethodNotAllowed(w)
 		return
 	}
+
+	h.ready.mu.Lock()
+	defer h.ready.mu.Unlock()
+
+	if time.Since(h.ready.lastCheck) <= readyCacheTTL {
+		if h.ready.lastOK {
+			writeOK(w, map[string]string{"status": "ready"}, nil)
+			return
+		}
+		writeErr(w, http.StatusServiceUnavailable, "DB_NOT_READY", h.ready.lastErrMsg)
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
 
 	sqlDB, err := h.db.DB()
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "INTERNAL", "failed to get sql db")
+		h.ready.lastCheck = time.Now()
+		h.ready.lastOK = false
+		h.ready.lastErrMsg = "failed to get sql db"
+		writeErr(w, http.StatusInternalServerError, "INTERNAL", h.ready.lastErrMsg)
 		return
 	}
 	if err := h.observeDB("ready_ping", func() error { return sqlDB.PingContext(ctx) }); err != nil {
-		writeErr(w, http.StatusServiceUnavailable, "DB_NOT_READY", "database ping failed")
+		h.ready.lastCheck = time.Now()
+		h.ready.lastOK = false
+		h.ready.lastErrMsg = "database ping failed"
+		writeErr(w, http.StatusServiceUnavailable, "DB_NOT_READY", h.ready.lastErrMsg)
 		return
 	}
+
+	h.ready.lastCheck = time.Now()
+	h.ready.lastOK = true
+	h.ready.lastErrMsg = ""
 	writeOK(w, map[string]string{"status": "ready"}, nil)
 }

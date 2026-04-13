@@ -6,7 +6,52 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"japan_data_project/internal/domain/model"
 )
+
+func (h *Service) handleCoverage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeMethodNotAllowed(w)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
+	defer cancel()
+
+	row := coverageRow{}
+	if err := h.observeDB("coverage_fact_summary", func() error {
+		return h.db.WithContext(ctx).Raw(`
+SELECT
+	MIN(to_char(trade_date, 'YYYY-MM-DD')) AS earliest_trade_date,
+	MAX(to_char(trade_date, 'YYYY-MM-DD')) AS latest_trade_date,
+	COUNT(*) AS fact_rows_total
+FROM fact_prices_daily
+`).Scan(&row).Error
+	}); err != nil {
+		writeErr(w, http.StatusInternalServerError, "DB_ERROR", "query failed")
+		return
+	}
+
+	var latestRun model.IngestionRun
+	if err := h.observeDB("coverage_latest_ingestion", func() error {
+		return h.db.WithContext(ctx).Order("id DESC").Limit(1).Find(&latestRun).Error
+	}); err != nil {
+		writeErr(w, http.StatusInternalServerError, "DB_ERROR", "query failed")
+		return
+	}
+	if latestRun.ID > 0 {
+		id := latestRun.ID
+		status := latestRun.Status
+		runType := latestRun.RunType
+		row.LastIngestionRunID = &id
+		row.LastIngestionStatus = &status
+		row.LastIngestionRunType = &runType
+		row.LastIngestionAt = latestRun.FinishedAt
+	}
+
+	writeOK(w, row, apiMeta{})
+}
 
 func (h *Service) handlePricesDaily(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -88,6 +133,117 @@ JOIN dim_origin o ON o.id = f.origin_id
 	}
 
 	writeOK(w, rows, apiMeta{"limit": limit, "offset": offset, "total": total})
+}
+
+func (h *Service) handlePricesLatest(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeMethodNotAllowed(w)
+		return
+	}
+
+	limit := clampInt(parseIntOrDefault(r.URL.Query().Get("limit"), 100), 1, 2000)
+	offset := maxInt(parseIntOrDefault(r.URL.Query().Get("offset"), 0), 0)
+	sort := parseDailySort(r.URL.Query().Get("sort"))
+	order := parseOrder(r.URL.Query().Get("order"))
+
+	whereSQL, whereArgs, err := buildPriceFilters(r, false)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "INVALID_ARGUMENT", err.Error())
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
+	defer cancel()
+
+	var latestTradeDate *string
+	latestDateQuery := `
+SELECT MAX(to_char(f.trade_date, 'YYYY-MM-DD')) AS latest_trade_date
+FROM fact_prices_daily f
+JOIN dim_market m ON m.id = f.market_id
+JOIN dim_item i ON i.id = f.item_id
+JOIN dim_origin o ON o.id = f.origin_id
+` + whereSQL
+	if err := h.observeDB("prices_latest_trade_date", func() error {
+		return h.db.WithContext(ctx).Raw(latestDateQuery, whereArgs...).Scan(&latestTradeDate).Error
+	}); err != nil {
+		writeErr(w, http.StatusInternalServerError, "DB_ERROR", "query failed")
+		return
+	}
+
+	if latestTradeDate == nil || strings.TrimSpace(*latestTradeDate) == "" {
+		writeOK(w, []dailyRow{}, apiMeta{"latest_trade_date": nil, "limit": limit, "offset": offset, "total": 0})
+		return
+	}
+
+	latestWhereSQL := whereSQL
+	latestWhereArgs := append([]any{}, whereArgs...)
+	if latestWhereSQL == "" {
+		latestWhereSQL = "WHERE f.trade_date = ?"
+	} else {
+		latestWhereSQL += " AND f.trade_date = ?"
+	}
+	latestWhereArgs = append(latestWhereArgs, *latestTradeDate)
+
+	query := `
+SELECT
+	to_char(f.trade_date, 'YYYY-MM-DD') AS trade_date,
+	f.weekday_ja,
+	m.market_code,
+	m.market_name,
+	i.item_code,
+	i.item_name,
+	o.origin_code,
+	o.origin_name,
+	g.grade,
+	g.class,
+	g.product_name,
+	g.unit_weight,
+	f.item_total_ton,
+	f.arrival_ton,
+	f.price_high_yen,
+	f.price_mid_yen,
+	f.price_low_yen,
+	f.trend_label,
+	f.source_file,
+	f.source_row_no
+FROM fact_prices_daily f
+JOIN dim_market m ON m.id = f.market_id
+JOIN dim_item i ON i.id = f.item_id
+JOIN dim_origin o ON o.id = f.origin_id
+JOIN dim_grade g ON g.id = f.grade_id
+` + latestWhereSQL + `
+ORDER BY ` + sort + ` ` + order + `
+LIMIT ? OFFSET ?`
+
+	countQuery := `
+SELECT COUNT(1)
+FROM fact_prices_daily f
+JOIN dim_market m ON m.id = f.market_id
+JOIN dim_item i ON i.id = f.item_id
+JOIN dim_origin o ON o.id = f.origin_id
+` + latestWhereSQL
+
+	rows := make([]dailyRow, 0, limit)
+	if err := h.observeDB("prices_latest_list", func() error {
+		return h.db.WithContext(ctx).Raw(query, append(latestWhereArgs, limit, offset)...).Scan(&rows).Error
+	}); err != nil {
+		writeErr(w, http.StatusInternalServerError, "DB_ERROR", "query failed")
+		return
+	}
+	for i := range rows {
+		rows[i].ItemTotal = roundFloatPtr2(rows[i].ItemTotal)
+		rows[i].ArrivalTon = roundFloatPtr2(rows[i].ArrivalTon)
+	}
+
+	var total int64
+	if err := h.observeDB("prices_latest_count", func() error {
+		return h.db.WithContext(ctx).Raw(countQuery, latestWhereArgs...).Scan(&total).Error
+	}); err != nil {
+		writeErr(w, http.StatusInternalServerError, "DB_ERROR", "count failed")
+		return
+	}
+
+	writeOK(w, rows, apiMeta{"latest_trade_date": *latestTradeDate, "limit": limit, "offset": offset, "total": total})
 }
 
 func (h *Service) handlePricesTrend(w http.ResponseWriter, r *http.Request) {

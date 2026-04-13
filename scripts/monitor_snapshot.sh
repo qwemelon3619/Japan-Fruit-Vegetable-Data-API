@@ -72,7 +72,7 @@ if curl -fsS -m 8 "$API_BASE_URL/metrics" >"$TMP_METRICS" 2>/dev/null; then
   fi
 fi
 
-if curl -fsS -m 8 "$API_BASE_URL/v1/ingestion/runs?limit=1" >"$TMP_RUNS" 2>/dev/null; then
+if curl -fsS -m 8 "$API_BASE_URL/ingestion/runs?limit=1" >"$TMP_RUNS" 2>/dev/null; then
   s="$(sed -n 's/.*"status":"\([^"]*\)".*/\1/p' "$TMP_RUNS" | head -n1)"
   if [[ -n "$s" ]]; then
     ingestion_latest_status="$s"

@@ -15,6 +15,16 @@ type dimensionRow struct {
 	Name string `json:"name"`
 }
 
+type coverageRow struct {
+	EarliestTradeDate    *string    `json:"earliest_trade_date"`
+	LatestTradeDate      *string    `json:"latest_trade_date"`
+	FactRowsTotal        int64      `json:"fact_rows_total"`
+	LastIngestionRunID   *uint      `json:"last_ingestion_run_id"`
+	LastIngestionStatus  *string    `json:"last_ingestion_status"`
+	LastIngestionRunType *string    `json:"last_ingestion_run_type"`
+	LastIngestionAt      *time.Time `json:"last_ingestion_finished_at"`
+}
+
 type dailyRow struct {
 	TradeDate   string   `json:"trade_date"`
 	WeekdayJA   string   `json:"weekday_ja"`

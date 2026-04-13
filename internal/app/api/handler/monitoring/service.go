@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"gorm.io/gorm"
@@ -14,7 +15,17 @@ import (
 type Service struct {
 	db      *gorm.DB
 	metrics *metricsStore
+	ready   readinessCache
 }
+
+type readinessCache struct {
+	mu         sync.Mutex
+	lastCheck  time.Time
+	lastOK     bool
+	lastErrMsg string
+}
+
+const readyCacheTTL = 5 * time.Second
 
 func NewService(db *gorm.DB) *Service {
 	return &Service{
@@ -42,6 +53,7 @@ func (s *Service) WrapWithObservability(logger *slog.Logger, next http.Handler) 
 		sw.Header().Set("X-Request-Id", requestID)
 		if !strings.HasPrefix(r.URL.Path, "/metrics") &&
 			!strings.HasPrefix(r.URL.Path, "/doc") &&
+			!strings.HasPrefix(r.URL.Path, "/doc-llm") &&
 			!strings.HasPrefix(r.URL.Path, "/monitoring/dashboard") &&
 			!strings.HasPrefix(r.URL.Path, "/monitoring/snapshots.csv") {
 			sw.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -73,6 +85,8 @@ func normalizeMetricPath(path string) string {
 		return "/metrics"
 	case path == "/doc":
 		return "/doc"
+	case path == "/doc-llm":
+		return "/doc-llm"
 	case path == "/monitoring/dashboard":
 		return "/monitoring/dashboard"
 	case path == "/monitoring/snapshots.csv":
@@ -93,10 +107,10 @@ func normalizeMetricPath(path string) string {
 		return "/v1/compare/markets"
 	case strings.HasPrefix(path, "/v1/rankings/items"):
 		return "/v1/rankings/items"
-	case strings.HasPrefix(path, "/v1/ingestion/runs"):
-		return "/v1/ingestion/runs"
-	case strings.HasPrefix(path, "/v1/ingestion/files"):
-		return "/v1/ingestion/files"
+	case strings.HasPrefix(path, "/ingestion/runs"):
+		return "/ingestion/runs"
+	case strings.HasPrefix(path, "/ingestion/files"):
+		return "/ingestion/files"
 	default:
 		return "/other"
 	}
