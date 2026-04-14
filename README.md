@@ -70,6 +70,11 @@ LLM-friendly API documentation:
 https://jp-vgfr-api.seungpyo.xyz/doc-llm
 ```
 
+Database / API SQL reference:
+```text
+./DB_API_SQL_REFERENCE.md
+```
+
 Administrative access policy:
 ```text
 /doc
@@ -95,9 +100,16 @@ Production deployments for this project additionally enforce access control and 
 - Coverage / Latest Data
   - `GET /v1/coverage`
   - `GET /v1/prices/latest`
+- Dimension Lookups
+  - `GET /v1/markets`
+  - `GET /v1/items`
+  - `GET /v1/origins`
 - Price Data
   - `GET /v1/prices/daily`
   - `GET /v1/prices/trend`
+  - `GET /v1/prices/trend/1m`
+  - `GET /v1/prices/trend/6m`
+  - `GET /v1/prices/trend/1y`
   - `GET /v1/prices/summary`
 - Compare/Ranking
   - `GET /v1/compare/markets`
@@ -114,6 +126,10 @@ Production deployments for this project additionally enforce access control and 
 
 ### Dimension APIs
 - `GET /v1/markets`, `GET /v1/items`, `GET /v1/origins`
+  - Purpose:
+    - `markets`: discover valid market codes before exact-code filters on fact/aggregation APIs
+    - `items`: discover valid item codes before daily/latest/trend/summary/ranking queries
+    - `origins`: discover valid origin codes before exact origin filters on price endpoints
   - Query: `limit` (default `50`, max `500`), `offset`, `q`, `sort`, `order`
   - `q` searches code/name with `LIKE`
   - Response `meta`: `limit`, `offset`, `total`
@@ -219,6 +235,7 @@ Production deployments for this project additionally enforce access control and 
 - `/v1/prices/daily`, `/v1/prices/trend`, and `/v1/prices/summary` apply a default recent-date filter (`from = today - 31 days`) when `date/from/to` are all omitted
 - `/v1/prices/latest` always returns rows from the latest available trade date for the requested non-date filters and does not support `date`, `from`, or `to`
 - When the default recent-date filter is auto-applied, response `meta` includes `default_from` and `default_window_days`
+- When source data has no origin name/code, the ingestor normalizes it to `origin_code='UNKNOWN'` and `origin_name='不明'`
 
 ## Example Queries
 ```bash
@@ -256,6 +273,296 @@ RUN_PIPELINE_INTEGRATION_TESTS=1 go test ./tests/pipeline -count=1
 - `scripts/`: operational scripts
 - `docker/`: nginx and cron settings
 - `tests/`: unit/integration tests
+
+## Architecture Diagram
+```text
+                        +-----------------------------+
+                        | MAFF wholesale data portal |
+                        | seisen.maff.go.jp          |
+                        +-------------+---------------+
+                                      |
+                                      | CSV / HTML fetch
+                                      v
+                    +---------------------------------------+
+                    | downloader                            |
+                    | - date/range fetch                    |
+                    | - Shift-JIS -> UTF-8 conversion       |
+                    | - daily merged CSV output             |
+                    +-------------------+-------------------+
+                                        |
+                                        | utf8/<YYYYMMDD>/all_<YYYYMMDD>.csv
+                                        v
+                    +---------------------------------------+
+                    | ingestor                              |
+                    | - parse + validate                    |
+                    | - dimension upsert                    |
+                    | - fact stage copy                     |
+                    | - fact merge on source_file,row_no    |
+                    +-------------------+-------------------+
+                                        |
+                            +-----------+------------+
+                            | PostgreSQL             |
+                            | - dim_*                |
+                            | - fact_prices_daily    |
+                            | - ingestion_*          |
+                            +-----------+------------+
+                                        |
+                     +------------------+------------------+
+                     |                                     |
+                     v                                     v
+          +-------------------------+          +--------------------------+
+          | API server              |          | monitoring snapshot job  |
+          | - /v1/*                 |          | - /ready, /metrics check |
+          | - /ready, /metrics      |          | - CSV snapshot output    |
+          | - /doc, /doc-llm        |          +-------------+------------+
+          +------------+------------+                        |
+                       |                                     v
+                       v                     data/monitoring/csv/snapshots.csv
+          +-----------------------------+
+          | Nginx / Cloudflare / users |
+          +-----------------------------+
+```
+
+## Why This Design
+
+### Why split downloader and ingestor
+- Upstream CSV acquisition and DB ingestion fail for different reasons, so separating them makes retries and diagnosis simpler.
+- Keeping UTF-8 normalized files on disk gives a reproducible intermediate artifact for debugging and re-ingestion.
+- The downloader can skip unpublished dates without forcing DB write logic to run.
+
+### Why use dimension + fact tables
+- Query APIs repeatedly filter by market, item, origin, and date, so a dimension/fact model keeps repeated strings out of the largest table.
+- Stable codes such as `market_code`, `item_code`, and `origin_code` map naturally to dimension lookups and exact filters.
+- Aggregation endpoints become simpler because the fact table stores already-normalized numeric fields.
+
+### Why keep ingestion metadata tables
+- `ingestion_runs` and `ingestion_files` give operators a first-class audit trail instead of inferring status from logs only.
+- `/v1/coverage` can expose recent ingestion status without reading log files or container state.
+
+### Why expose both raw and aggregated APIs
+- `daily` supports debugging and exports.
+- `latest` supports current-state dashboards.
+- `trend` and `summary` support time-series and rollup analytics.
+- `compare` and `rankings` support product-facing exploratory views without requiring clients to compose complex SQL.
+
+## DB Schema and Index Design
+
+### Schema overview
+- `dim_market`: market code/name master
+- `dim_item`: item code/name master
+- `dim_origin`: origin code/name master
+- `dim_grade`: grade/class/product/unit-weight composite dimension
+- `fact_prices_daily`: normalized daily wholesale fact rows
+- `ingestion_runs`, `ingestion_files`: ingestion audit metadata
+
+Full SQL-oriented schema notes live in [DB_API_SQL_REFERENCE.md](./DB_API_SQL_REFERENCE.md).
+
+### Why these keys
+- `dim_market.market_code`, `dim_item.item_code`, `dim_origin.origin_code` are unique because codes are the canonical API filter keys.
+- `dim_grade` uses a composite unique key because no single source code identifies grade/class/product/unit-weight combinations.
+- `fact_prices_daily` uses `source_file + source_row_no` as a unique key because that is the closest stable row identity from the upstream source.
+
+### Why these fact indexes
+- `idx_fact_trade_market (trade_date, market_id)`
+  - supports date-first scans and market comparisons on a single day.
+- `idx_fact_trade_item_market (trade_date, item_id, market_id)`
+  - supports date + item filters and compare/ranking patterns where market grouping matters.
+- `idx_fact_item_trade (item_id, trade_date)`
+  - supports `daily`, `trend`, and `summary` where `item_code` is required and date range is common.
+- `idx_fact_origin_trade (origin_id, trade_date)`
+  - supports origin-filtered queries without requiring a full scan by date.
+
+### Why not store everything denormalized
+- It would simplify some reads, but the fact table would be much wider and more repetitive.
+- Repeated market/item/origin names would increase storage and update cost.
+- Exact code lookup APIs would still need canonical code/name management somewhere.
+
+### Why not use exact `COUNT(*)` for coverage
+- `/v1/coverage` is intended as a lightweight operational endpoint.
+- Full-table counts on a large fact table are expensive and unnecessary for a coarse coverage indicator.
+- PostgreSQL statistics via `pg_class.reltuples` are a deliberate latency vs accuracy tradeoff.
+
+## Failure, Exception, and Operations Strategy
+
+### Upstream data exceptions
+- The source portal may not publish data for weekends, holidays, or some dates.
+- The downloader treats `no market table rows` as a normal skip condition for unpublished dates.
+- Historical completeness is therefore limited by upstream exposure, not only by local storage.
+
+### Ingestion exceptions
+- CSV rows are parsed with validation for required columns, numeric fields, and non-negative values.
+- Bad rows are counted into `rows_error` instead of crashing the entire system by default.
+- File- or group-level failures are captured into ingestion status tables for later inspection.
+
+### Idempotency and retry behavior
+- Re-ingesting the same source file does not duplicate facts because merge uses `ON CONFLICT (source_file, source_row_no)`.
+- Dimension tables are upserted before fact merge, so reference IDs stay consistent across reruns.
+- Transaction-level retriable errors are explicitly recognized for retry handling.
+
+### Operational protection
+- Admin and monitoring routes are expected to be protected by Nginx, Cloudflare, or network policy.
+- Monitoring snapshots are generated independently from daily ingest so observability can continue even when ingestion fails.
+- `/ready` checks database availability; `/metrics` exposes request and DB error signals for alerting.
+
+### Common operator actions
+- If `/v1/coverage.fact_rows_total` looks stale after ingest, run `ANALYZE fact_prices_daily;`.
+- If source origin is missing, the ingestor normalizes it to `origin_code='UNKNOWN'` and `origin_name='不明'`.
+- Use `/ingestion/runs` and `/ingestion/files` to distinguish full-run failure from partial file failure.
+
+## Testing Strategy
+
+### Test layers
+- Unit tests cover handler/helper behavior and validation logic.
+- API integration tests validate live endpoint behavior against a running API.
+- Pipeline integration tests validate downloader/ingestor behavior against the DB-backed pipeline.
+
+### Why environment-gated integration tests
+- API and pipeline integration tests need a running service or database-backed environment.
+- Gating with `RUN_API_INTEGRATION_TESTS` and `RUN_PIPELINE_INTEGRATION_TESTS` keeps normal local `go test ./...` fast and predictable.
+
+### What the tests are trying to prove
+- The handler contract matches documented response shapes and status codes.
+- Query parameter validation behaves correctly.
+- Ingestion writes normalized data without breaking uniqueness or metadata logging assumptions.
+- End-to-end flows remain stable when running against the real service boundary.
+
+## Monitoring Metrics and Signals
+
+### Primary observability surfaces
+- `GET /health`: process liveness
+- `GET /ready`: DB-backed readiness
+- `GET /metrics`: Prometheus metrics
+- `GET /monitoring/dashboard`: lightweight operator UI
+- `GET /monitoring/snapshots.csv`: snapshot history for low-cost monitoring
+
+### Useful metrics/signals
+- HTTP request totals by path/method/status
+- 5xx error count
+- DB error totals
+- request latency, including p95-style monitoring views
+- latest ingestion status
+- readiness success/failure
+
+### Why snapshots exist in addition to Prometheus metrics
+- CSV snapshots are simple to archive, inspect, and diff without a full metrics backend.
+- They provide a lightweight operational history even in minimal deployments.
+- They decouple coarse operational visibility from live scrape availability.
+
+## Real API Examples
+
+### Coverage and latest ingestion
+```bash
+curl -s "http://localhost:8080/v1/coverage"
+```
+
+```json
+{
+  "data": {
+    "earliest_trade_date": "2021-04-08",
+    "latest_trade_date": "2026-04-10",
+    "fact_rows_total": 123456,
+    "last_ingestion_run_id": 42,
+    "last_ingestion_status": "success",
+    "last_ingestion_run_type": "daily",
+    "last_ingestion_finished_at": "2026-04-10T01:23:45Z"
+  },
+  "meta": {}
+}
+```
+
+### Dimension lookup
+```bash
+curl -s "http://localhost:8080/v1/items?q=だいこん&limit=5&order=asc"
+```
+
+```json
+{
+  "data": [
+    { "id": 1, "code": "30100", "name": "だいこん" }
+  ],
+  "meta": { "limit": 5, "offset": 0, "total": 1 }
+}
+```
+
+### Raw fact rows
+```bash
+curl -s "http://localhost:8080/v1/prices/daily?item_code=30100&from=2026-04-01&to=2026-04-10&limit=3"
+```
+
+```json
+{
+  "data": [
+    {
+      "trade_date": "2026-04-10",
+      "market_code": "13300",
+      "item_code": "30100",
+      "origin_code": "40100",
+      "price_mid_yen": 2480
+    }
+  ],
+  "meta": { "limit": 3, "offset": 0, "total": 1 }
+}
+```
+
+### Trend aggregation
+```bash
+curl -s "http://localhost:8080/v1/prices/trend?item_code=30100&from=2026-04-01&to=2026-04-30"
+```
+
+```json
+{
+  "data": [
+    {
+      "trade_date": "2026-04-01",
+      "rows_count": 12,
+      "avg_price_mid_yen": 2510.5,
+      "max_price_mid_yen": 3000,
+      "min_price_mid_yen": 2000,
+      "arrival_ton_sum": 14.2
+    }
+  ],
+  "meta": { "total": 1 }
+}
+```
+
+### Ranking view
+```bash
+curl -s "http://localhost:8080/v1/rankings/items?date=2026-04-16&metric=arrival&limit=20"
+```
+
+```json
+{
+  "data": [
+    {
+      "item_code": "30100",
+      "item_name": "だいこん",
+      "rows_count": 14,
+      "metric_value": 42.7
+    }
+  ],
+  "meta": { "metric": "arrival", "limit": 20, "total": 1 }
+}
+```
+
+## Tradeoffs
+
+### What this design optimizes for
+- operational simplicity
+- reproducible ingest artifacts
+- low-friction analytics APIs
+- straightforward SQL and debugging
+
+### Tradeoffs accepted
+- No auth middleware in the app itself.
+  - Simpler app code, but security depends on reverse proxy and network controls.
+- No heavy warehouse layer or summary tables.
+  - Simpler writes and fewer moving parts, but some exact large-scale analytics are intentionally avoided.
+- Coverage count is estimated, not exact.
+  - Faster operational endpoint, but less precise.
+- Recent-date defaults on some endpoints.
+  - Safer and cheaper default queries, but users must know to pass explicit ranges for full-history analysis.
+- Dimension/fact normalization instead of a wide denormalized fact table.
+  - Better consistency and storage profile, but requires joins on read.
 
 ## Limitations
 - The downloader depends on the upstream MAFF HTML structure and CSV exposure flow; upstream changes may require parser updates

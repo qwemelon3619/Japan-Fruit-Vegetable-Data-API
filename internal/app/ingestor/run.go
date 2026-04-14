@@ -35,7 +35,7 @@ const (
 	runStatusWarn           = "partial_failed"
 	runStatusFail           = "failed"
 	unknownOriginCode       = "UNKNOWN"
-	unknownOriginName       = "Unknown"
+	unknownOriginName       = "不明"
 	maxFileTxnRetry         = 3
 	ingestorLockKey         = int64(90420260408)
 	defaultFileLogBatchSize = 500

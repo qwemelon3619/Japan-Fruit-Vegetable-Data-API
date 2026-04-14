@@ -59,6 +59,7 @@
       "path": "/v1/coverage",
       "method": "GET",
       "summary": "Returns available fact table coverage. fact_rows_total is an estimate from PostgreSQL statistics.",
+      "purpose": "Use this first to confirm the available warehouse date range and whether the latest ingestion completed successfully.",
       "example": "GET /v1/coverage",
       "response_example": {
         "data": {
@@ -86,6 +87,7 @@
       "path": "/v1/markets",
       "method": "GET",
       "summary": "Lists market dimension rows.",
+      "purpose": "Use this to discover valid market codes before calling fact or aggregation endpoints with exact market filters.",
       "response_example": {
         "data": [
           {
@@ -112,6 +114,7 @@
       "path": "/v1/items",
       "method": "GET",
       "summary": "Lists item dimension rows.",
+      "purpose": "Use this to discover valid item codes before querying raw rows, trends, summaries, or rankings.",
       "response_example": {
         "data": [
           {
@@ -138,6 +141,7 @@
       "path": "/v1/origins",
       "method": "GET",
       "summary": "Lists origin dimension rows.",
+      "purpose": "Use this to discover valid origin codes before applying exact origin filters on price endpoints.",
       "response_example": {
         "data": [
           {
@@ -164,6 +168,7 @@
       "path": "/v1/prices/daily",
       "method": "GET",
       "summary": "Returns raw daily price fact rows for a required item_code. If date/from/to are all omitted, from defaults to today-31 days.",
+      "purpose": "Use this when you need raw fact rows for debugging, source auditing, exports, or custom downstream aggregation.",
       "response_example": {
         "data": [
           {
@@ -219,6 +224,7 @@
       "path": "/v1/prices/latest",
       "method": "GET",
       "summary": "Returns rows for the latest available trade date for a required item_code. date, from, and to are not supported.",
+      "purpose": "Use this for dashboards and applications that only need the freshest available snapshot for an item.",
       "example": "GET /v1/prices/latest?item_code=30100&limit=10",
       "response_example": {
         "data": [
@@ -256,6 +262,7 @@
       "path": "/v1/prices/trend",
       "method": "GET",
       "summary": "Aggregates trend by trade date for a required item_code. If date/from/to are all omitted, from defaults to today-31 days.",
+      "purpose": "Use this to plot time-series movement such as average mid-price, min or max range, and summed arrivals by day.",
       "response_example": {
         "data": [
           {
@@ -288,6 +295,7 @@
       "path": "/v1/prices/trend/1m",
       "method": "GET",
       "summary": "Same output as /v1/prices/trend with from/to automatically set to the last 1 month.",
+      "purpose": "Use this preset when the client wants a recent 1-month trend window without calculating dates.",
       "response_example": {
         "data": [
           {
@@ -313,6 +321,7 @@
       "path": "/v1/prices/trend/6m",
       "method": "GET",
       "summary": "Same output as /v1/prices/trend with from/to automatically set to the last 6 months.",
+      "purpose": "Use this preset when the client wants a recent 6-month trend window without calculating dates.",
       "response_example": {
         "data": [
           {
@@ -338,6 +347,7 @@
       "path": "/v1/prices/trend/1y",
       "method": "GET",
       "summary": "Same output as /v1/prices/trend with from/to automatically set to the last 1 year.",
+      "purpose": "Use this preset when the client wants a recent 1-year trend window without calculating dates.",
       "response_example": {
         "data": [
           {
@@ -363,6 +373,7 @@
       "path": "/v1/prices/summary",
       "method": "GET",
       "summary": "Aggregates summary by day, week, or month for a required item_code. If date/from/to are all omitted, from defaults to today-31 days.",
+      "purpose": "Use this for reporting views that need weekly or monthly rollups instead of raw rows or daily trend points.",
       "response_example": {
         "data": [
           {
@@ -396,6 +407,7 @@
       "path": "/v1/compare/markets",
       "method": "GET",
       "summary": "Compares markets for a single date and item.",
+      "purpose": "Use this to compare the same item across markets on one date and identify relative differences in price or arrival volume.",
       "response_example": {
         "data": [
           {
@@ -421,6 +433,7 @@
       "path": "/v1/rankings/items",
       "method": "GET",
       "summary": "Ranks items for a date by arrival or price_mid.",
+      "purpose": "Use this to build top-N views such as the most-arrived items or the highest-priced items for a specific trading date.",
       "response_example": {
         "data": [
           {
