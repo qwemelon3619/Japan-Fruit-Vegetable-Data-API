@@ -97,7 +97,7 @@ func (h *Service) handlePricesDaily(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if ids == nil || ids.ItemID == nil {
-		writeOK(w, []dailyRow{}, apiMeta{"limit": limit, "offset": offset, "total": 0})
+		writeOK(w, []dailyRow{}, apiMeta{"limit": limit, "offset": offset})
 		return
 	}
 
@@ -149,8 +149,7 @@ SELECT
 	ff.price_low_yen,
 	ff.trend_label,
 	ff.source_file,
-	ff.source_row_no,
-	COUNT(*) OVER() AS total_count
+	ff.source_row_no
 FROM filtered_fact ff
 JOIN dim_market m ON m.id = ff.market_id
 JOIN dim_item i ON i.id = ff.item_id
@@ -158,11 +157,6 @@ JOIN dim_origin o ON o.id = ff.origin_id
 JOIN dim_grade g ON g.id = ff.grade_id
 ORDER BY ` + orderBy + ` ` + order + `
 LIMIT ? OFFSET ?`
-
-	countQuery := `
-SELECT COUNT(1)
-FROM fact_prices_daily f
-` + whereSQL
 
 	pageRows := make([]dailyRowWithTotal, 0, limit)
 	if err := h.observeDB("prices_daily_page", func() error {
@@ -172,23 +166,16 @@ FROM fact_prices_daily f
 		return
 	}
 	rows := make([]dailyRow, 0, len(pageRows))
-	var total int64
 	if len(pageRows) > 0 {
-		total = pageRows[0].TotalCount
 		for i := range pageRows {
 			row := pageRows[i].DailyRow
 			row.ItemTotal = roundFloatPtr2(row.ItemTotal)
 			row.ArrivalTon = roundFloatPtr2(row.ArrivalTon)
 			rows = append(rows, row)
 		}
-	} else if err := h.observeDB("prices_daily_count_fallback", func() error {
-		return h.db.WithContext(ctx).Raw(countQuery, whereArgs...).Scan(&total).Error
-	}); err != nil {
-		writeErr(w, http.StatusInternalServerError, "DB_ERROR", "count failed")
-		return
 	}
 
-	meta := apiMeta{"limit": limit, "offset": offset, "total": total}
+	meta := apiMeta{"limit": limit, "offset": offset}
 	if defaultFrom != nil {
 		meta["default_from"] = *defaultFrom
 		meta["default_window_days"] = defaultRecentDays
@@ -653,18 +640,26 @@ func (h *Service) handleRankingsItems(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := `
+WITH ranked AS (
+	SELECT
+		f.item_id,
+		` + metricCountExpr + ` AS rows_count,
+		` + metricExpr + ` AS metric_value
+	FROM fact_prices_daily f
+` + where + `
+	GROUP BY f.item_id
+	HAVING ` + metricCountExpr + ` > 0
+	ORDER BY metric_value ` + order + ` NULLS LAST, f.item_id ASC
+	LIMIT ?
+)
 SELECT
 	i.item_code,
 	i.item_name,
-	` + metricCountExpr + ` AS rows_count,
-	` + metricExpr + ` AS metric_value
-FROM fact_prices_daily f
-JOIN dim_item i ON i.id = f.item_id
-` + where + `
-GROUP BY i.item_code, i.item_name
-HAVING ` + metricCountExpr + ` > 0
-ORDER BY metric_value ` + order + ` NULLS LAST, i.item_code ASC
-LIMIT ?`
+	r.rows_count,
+	r.metric_value
+FROM ranked r
+JOIN dim_item i ON i.id = r.item_id
+ORDER BY r.metric_value ` + order + ` NULLS LAST, i.item_code ASC`
 	args = append(args, limit)
 
 	rows := make([]rankingItemRow, 0, limit)
