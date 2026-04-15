@@ -72,7 +72,7 @@ https://jp-vgfr-api.seungpyo.xyz/doc-llm
 
 Database / API SQL reference:
 ```text
-./DB_API_SQL_REFERENCE.md
+./plan/DB_API_SQL_REFERENCE.md
 ```
 
 Administrative access policy:
@@ -222,7 +222,6 @@ Production deployments for this project additionally enforce access control and 
   - `50 -> 60 -> 70 -> 80 -> 90 req/s` staged run stayed well under `p95 100ms`
   - `50 -> 105 -> 110 -> 115 -> 120 req/s` staged run ended near the boundary at `p95 978.79ms`
   - `100 -> 120 -> 140 -> 160 -> 180 req/s` exceeded the target with `p95 1603.81ms`
-  - detailed summary: `plan/api_performance_resume.md`
 
 ## Data Workflow
 1. `downloader` fetches source CSV files from the MAFF portal
@@ -239,6 +238,8 @@ Production deployments for this project additionally enforce access control and 
 ## Environment Variables
 - `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`: database connection
 - `POSTGRES_SSLMODE`, `POSTGRES_TIMEZONE`: PostgreSQL connection behavior
+- `POSTGRES_MAX_OPEN_CONNS`, `POSTGRES_MAX_IDLE_CONNS`: DB pool size controls
+- `POSTGRES_CONN_MAX_LIFETIME`, `POSTGRES_CONN_MAX_IDLE_TIME`: DB connection recycling controls
 - `HTTP_PORT`: API listen port inside the container/process
 - `DAILY_INGEST_SCHEDULE`: cron schedule for daily download + ingest
 - `MONITOR_SNAPSHOT_SCHEDULE`: cron schedule for monitoring CSV snapshots
@@ -290,6 +291,7 @@ Run stress tests with `k6`:
 k6 run tests/stress/baseline.js
 k6 run tests/stress/step_read.js
 k6 run tests/stress/mixed_read.js
+k6 run tests/stress/p95_one_second_breakpoint.js
 ```
 
 ## Project Structure
@@ -297,24 +299,19 @@ k6 run tests/stress/mixed_read.js
 - `internal/`: domain, handler, and platform logic
 - `scripts/`: operational scripts
 - `docker/`: nginx and cron settings
-- `tests/unit/`: unit and integration tests
+- `tests/unit/`: Go test suites
 - `tests/stress/`: `k6` stress test scripts and result artifacts
 
 ## Stress Testing
-
-### Current setup
 - Stress test scripts live under [tests/stress](./tests/stress)
 - Result JSON files are stored under [tests/stress/result](./tests/stress/result)
-- The current default target is the production API:
+- Default production target:
   - `https://jp-vgfr-api.seungpyo.xyz`
+- Production measurement profile used in recent tests:
+  - API server: `1 vCPU / 1GB RAM`
+  - PostgreSQL server: `1 vCPU / 1GB RAM`
 
-### Current production test target
-- API server: `1 vCPU / 1GB RAM`
-- PostgreSQL server: `1 vCPU / 1GB RAM`
-
-This means tail latency under aggregation-heavy load is expected to rise earlier than on a larger deployment.
-
-### Current `k6` profiles
+### Available `k6` profiles
 - `baseline.js`
   - 5 VUs for 2 minutes
   - low-risk smoke/baseline check
@@ -324,36 +321,12 @@ This means tail latency under aggregation-heavy load is expected to rise earlier
 - `mixed_read.js`
   - 10 -> 15 -> 15 VUs
   - conservative read load while ingestion runs in parallel
+- `high_read_breakpoint.js`
+  - aggressive VU-based breakpoint search
+- `p95_one_second_breakpoint.js`
+  - req/s-based staged search for the highest throughput that still keeps `p95 < 1s`
 
-### Current observed results
-
-Baseline result from `tests/stress/result/baseline.json`:
-- total requests: `580`
-- request rate: about `4.80 req/s`
-- p95 latency: about `50.19ms`
-- average latency: about `37.88ms`
-- max latency: about `215.10ms`
-- request checks: `580/580` passed
-
-Step-read result from `tests/stress/result/step_read.json`:
-- total requests: `9328`
-- request rate: about `11.94 req/s`
-- p95 latency: about `679.06ms`
-- average latency: about `119.75ms`
-- max latency: about `4525.22ms`
-- failed request rate: about `0.01%`
-- request checks: `9327/9328` passed
-
-### Interpretation
-- On this hardware profile, baseline performance is strong.
-- Under staged read load, median latency remains acceptable, but tail latency rises significantly.
-- The system still remains mostly available under the current conservative production-safe load.
-- The likely source of tail latency is aggregation-heavy endpoints such as:
-  - `/v1/prices/trend`
-  - `/v1/prices/summary`
-  - `/v1/rankings/items`
-
-### What to look at when analyzing results
+### What to inspect when analyzing results
 - `http_req_failed`
 - `http_req_duration` p50 / p95 / p99
 - max latency spikes
@@ -361,18 +334,7 @@ Step-read result from `tests/stress/result/step_read.json`:
 - `docker stats`
 - `pg_stat_activity`
 - `pg_stat_statements`
-
-### Recommended optimization ideas
-- Add short-TTL caching for:
-  - `/v1/coverage`
-  - `/v1/prices/latest`
-  - `/v1/prices/trend`
-  - `/v1/prices/summary`
-  - `/v1/rankings/items`
-- Consider summary tables or materialized views for aggregation-heavy endpoints.
-- Keep the normalized source-of-truth fact table, but introduce pre-aggregated read models for trend/summary/ranking queries.
-- If read/write contention becomes an issue during mixed load, consider a read replica before introducing more complex DB partitioning or sharding.
-- Add new indexes only after confirming slow-query patterns with `pg_stat_statements` and `EXPLAIN ANALYZE`.
+- detailed commands and current scripts: [tests/stress/README.md](./tests/stress/README.md)
 
 ## Architecture Diagram
 ```text
@@ -455,7 +417,7 @@ Step-read result from `tests/stress/result/step_read.json`:
 - `fact_prices_daily`: normalized daily wholesale fact rows
 - `ingestion_runs`, `ingestion_files`: ingestion audit metadata
 
-Full SQL-oriented schema notes live in [DB_API_SQL_REFERENCE.md](./DB_API_SQL_REFERENCE.md).
+Full SQL-oriented schema notes live in [DB_API_SQL_REFERENCE.md](./plan/DB_API_SQL_REFERENCE.md).
 
 ### Why these keys
 - `dim_market.market_code`, `dim_item.item_code`, `dim_origin.origin_code` are unique because codes are the canonical API filter keys.
