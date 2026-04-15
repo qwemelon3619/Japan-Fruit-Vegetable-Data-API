@@ -48,6 +48,12 @@ type dailyRow struct {
 	SourceRowNo int      `json:"source_row_no"`
 }
 
+type dailyRowWithTotal struct {
+	DailyRow        dailyRow `gorm:"embedded"`
+	TotalCount      int64    `gorm:"column:total_count"`
+	LatestTradeDate *string  `gorm:"column:latest_trade_date"`
+}
+
 type trendRow struct {
 	TradeDate   string   `json:"trade_date" gorm:"column:trade_date"`
 	RowsCount   int64    `json:"rows_count" gorm:"column:rows_count"`

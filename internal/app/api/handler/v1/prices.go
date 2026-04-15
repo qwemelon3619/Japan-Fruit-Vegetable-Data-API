@@ -2,12 +2,15 @@ package v1
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"math"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
+	"gorm.io/gorm"
 	"japan_data_project/internal/domain/model"
 )
 
@@ -81,68 +84,104 @@ func (h *Service) handlePricesDaily(w http.ResponseWriter, r *http.Request) {
 	sort := parseDailySort(r.URL.Query().Get("sort"))
 	order := parseOrder(r.URL.Query().Get("order"))
 
-	whereSQL, whereArgs, defaultFrom, err := buildPriceFilters(r, true)
+	ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
+	defer cancel()
+
+	ids, err := h.resolveCodeIDs(ctx,
+		strings.TrimSpace(r.URL.Query().Get("item_code")),
+		strings.TrimSpace(r.URL.Query().Get("market_code")),
+		strings.TrimSpace(r.URL.Query().Get("origin_code")),
+	)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "DB_ERROR", "query failed")
+		return
+	}
+	if ids == nil || ids.ItemID == nil {
+		writeOK(w, []dailyRow{}, apiMeta{"limit": limit, "offset": offset, "total": 0})
+		return
+	}
+
+	whereSQL, whereArgs, defaultFrom, err := buildFactPriceFilters(r.URL.Query(), ids, true)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "INVALID_ARGUMENT", err.Error())
 		return
 	}
 
+	orderBy := parseDailySortColumn(sort)
 	query := `
+WITH filtered_fact AS (
+	SELECT
+		f.id,
+		f.trade_date,
+		f.weekday_ja,
+		f.market_id,
+		f.item_id,
+		f.origin_id,
+		f.grade_id,
+		f.item_total_ton,
+		f.arrival_ton,
+		f.price_high_yen,
+		f.price_mid_yen,
+		f.price_low_yen,
+		f.trend_label,
+		f.source_file,
+		f.source_row_no
+	FROM fact_prices_daily f
+	` + whereSQL + `
+)
 SELECT
-	to_char(f.trade_date, 'YYYY-MM-DD') AS trade_date,
-	f.weekday_ja,
-	m.market_code,
-	m.market_name,
-	i.item_code,
-	i.item_name,
-	o.origin_code,
-	o.origin_name,
-	g.grade,
-	g.class,
-	g.product_name,
-	g.unit_weight,
-	f.item_total_ton,
-	f.arrival_ton,
-	f.price_high_yen,
-	f.price_mid_yen,
-	f.price_low_yen,
-	f.trend_label,
-	f.source_file,
-	f.source_row_no
-FROM fact_prices_daily f
-JOIN dim_market m ON m.id = f.market_id
-JOIN dim_item i ON i.id = f.item_id
-JOIN dim_origin o ON o.id = f.origin_id
-JOIN dim_grade g ON g.id = f.grade_id
-` + whereSQL + `
-ORDER BY ` + sort + ` ` + order + `
+	to_char(ff.trade_date, 'YYYY-MM-DD') AS trade_date,
+	ff.weekday_ja,
+	market_code,
+	market_name,
+	item_code,
+	item_name,
+	origin_code,
+	origin_name,
+	grade,
+	class,
+	product_name,
+	unit_weight,
+	ff.item_total_ton,
+	ff.arrival_ton,
+	ff.price_high_yen,
+	ff.price_mid_yen,
+	ff.price_low_yen,
+	ff.trend_label,
+	ff.source_file,
+	ff.source_row_no,
+	COUNT(*) OVER() AS total_count
+FROM filtered_fact ff
+JOIN dim_market m ON m.id = ff.market_id
+JOIN dim_item i ON i.id = ff.item_id
+JOIN dim_origin o ON o.id = ff.origin_id
+JOIN dim_grade g ON g.id = ff.grade_id
+ORDER BY ` + orderBy + ` ` + order + `
 LIMIT ? OFFSET ?`
 
 	countQuery := `
 SELECT COUNT(1)
 FROM fact_prices_daily f
-JOIN dim_market m ON m.id = f.market_id
-JOIN dim_item i ON i.id = f.item_id
-JOIN dim_origin o ON o.id = f.origin_id
 ` + whereSQL
 
-	ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
-	defer cancel()
-
-	rows := make([]dailyRow, 0, limit)
-	if err := h.observeDB("prices_daily_list", func() error {
-		return h.db.WithContext(ctx).Raw(query, append(whereArgs, limit, offset)...).Scan(&rows).Error
+	pageRows := make([]dailyRowWithTotal, 0, limit)
+	if err := h.observeDB("prices_daily_page", func() error {
+		return h.db.WithContext(ctx).Raw(query, append(whereArgs, limit, offset)...).Scan(&pageRows).Error
 	}); err != nil {
 		writeErr(w, http.StatusInternalServerError, "DB_ERROR", "query failed")
 		return
 	}
-	for i := range rows {
-		rows[i].ItemTotal = roundFloatPtr2(rows[i].ItemTotal)
-		rows[i].ArrivalTon = roundFloatPtr2(rows[i].ArrivalTon)
-	}
-
+	rows := make([]dailyRow, 0, len(pageRows))
 	var total int64
-	if err := h.observeDB("prices_daily_count", func() error {
+	if len(pageRows) > 0 {
+		total = pageRows[0].TotalCount
+		for i := range pageRows {
+			row := pageRows[i].DailyRow
+			row.ItemTotal = roundFloatPtr2(row.ItemTotal)
+			row.ArrivalTon = roundFloatPtr2(row.ArrivalTon)
+			rows = append(rows, row)
+		}
+	} else if err := h.observeDB("prices_daily_count_fallback", func() error {
 		return h.db.WithContext(ctx).Raw(countQuery, whereArgs...).Scan(&total).Error
 	}); err != nil {
 		writeErr(w, http.StatusInternalServerError, "DB_ERROR", "count failed")
@@ -172,8 +211,7 @@ func (h *Service) handlePricesLatest(w http.ResponseWriter, r *http.Request) {
 	sort := parseDailySort(r.URL.Query().Get("sort"))
 	order := parseOrder(r.URL.Query().Get("order"))
 
-	whereSQL, whereArgs, err := buildLatestFilters(r)
-	if err != nil {
+	if _, _, err := buildLatestFilters(r); err != nil {
 		writeErr(w, http.StatusBadRequest, "INVALID_ARGUMENT", err.Error())
 		return
 	}
@@ -181,98 +219,122 @@ func (h *Service) handlePricesLatest(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
 	defer cancel()
 
+	ids, err := h.resolveCodeIDs(ctx,
+		strings.TrimSpace(r.URL.Query().Get("item_code")),
+		strings.TrimSpace(r.URL.Query().Get("market_code")),
+		strings.TrimSpace(r.URL.Query().Get("origin_code")),
+	)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "DB_ERROR", "query failed")
+		return
+	}
+	if ids == nil || ids.ItemID == nil {
+		meta := apiMeta{"latest_trade_date": nil, "limit": limit, "offset": offset, "total": 0}
+		writeOK(w, []dailyRow{}, meta)
+		return
+	}
+
 	var latestTradeDate *string
 	latestDateQuery := `
-SELECT to_char(f.trade_date, 'YYYY-MM-DD') AS latest_trade_date
-FROM fact_prices_daily f
-JOIN dim_market m ON m.id = f.market_id
-JOIN dim_item i ON i.id = f.item_id
-JOIN dim_origin o ON o.id = f.origin_id
-` + whereSQL + `
-ORDER BY f.trade_date DESC
-LIMIT 1`
+SELECT to_char(MAX(trade_date), 'YYYY-MM-DD') AS latest_trade_date
+FROM fact_prices_daily
+WHERE item_id = ?`
+	latestDateArgs := []any{*ids.ItemID}
+	if ids.MarketID != nil {
+		latestDateQuery += " AND market_id = ?"
+		latestDateArgs = append(latestDateArgs, *ids.MarketID)
+	}
+	if ids.OriginID != nil {
+		latestDateQuery += " AND origin_id = ?"
+		latestDateArgs = append(latestDateArgs, *ids.OriginID)
+	}
 	if err := h.observeDB("prices_latest_trade_date", func() error {
-		return h.db.WithContext(ctx).Raw(latestDateQuery, whereArgs...).Scan(&latestTradeDate).Error
+		return h.db.WithContext(ctx).Raw(latestDateQuery, latestDateArgs...).Scan(&latestTradeDate).Error
 	}); err != nil {
 		writeErr(w, http.StatusInternalServerError, "DB_ERROR", "query failed")
 		return
 	}
-
 	if latestTradeDate == nil || strings.TrimSpace(*latestTradeDate) == "" {
 		meta := apiMeta{"latest_trade_date": nil, "limit": limit, "offset": offset, "total": 0}
 		writeOK(w, []dailyRow{}, meta)
 		return
 	}
 
-	latestWhereSQL := whereSQL
-	latestWhereArgs := append([]any{}, whereArgs...)
-	if latestWhereSQL == "" {
-		latestWhereSQL = "WHERE f.trade_date = ?"
-	} else {
-		latestWhereSQL += " AND f.trade_date = ?"
-	}
-	latestWhereArgs = append(latestWhereArgs, *latestTradeDate)
+	latestWhereSQL, latestWhereArgs := buildFactLatestFilters(ids, *latestTradeDate)
 
+	orderBy := parseDailySortColumn(sort)
 	query := `
+WITH filtered_fact AS (
+	SELECT
+		f.id,
+		f.trade_date,
+		f.weekday_ja,
+		f.market_id,
+		f.item_id,
+		f.origin_id,
+		f.grade_id,
+		f.item_total_ton,
+		f.arrival_ton,
+		f.price_high_yen,
+		f.price_mid_yen,
+		f.price_low_yen,
+		f.trend_label,
+		f.source_file,
+		f.source_row_no
+	FROM fact_prices_daily f
+	` + latestWhereSQL + `
+)
 SELECT
-	to_char(f.trade_date, 'YYYY-MM-DD') AS trade_date,
-	f.weekday_ja,
-	m.market_code,
-	m.market_name,
-	i.item_code,
-	i.item_name,
-	o.origin_code,
-	o.origin_name,
-	g.grade,
-	g.class,
-	g.product_name,
-	g.unit_weight,
-	f.item_total_ton,
-	f.arrival_ton,
-	f.price_high_yen,
-	f.price_mid_yen,
-	f.price_low_yen,
-	f.trend_label,
-	f.source_file,
-	f.source_row_no
-FROM fact_prices_daily f
-JOIN dim_market m ON m.id = f.market_id
-JOIN dim_item i ON i.id = f.item_id
-JOIN dim_origin o ON o.id = f.origin_id
-JOIN dim_grade g ON g.id = f.grade_id
-` + latestWhereSQL + `
-ORDER BY ` + sort + ` ` + order + `
+	to_char(ff.trade_date, 'YYYY-MM-DD') AS trade_date,
+	ff.weekday_ja,
+	market_code,
+	market_name,
+	item_code,
+	item_name,
+	origin_code,
+	origin_name,
+	grade,
+	class,
+	product_name,
+	unit_weight,
+	ff.item_total_ton,
+	ff.arrival_ton,
+	ff.price_high_yen,
+	ff.price_mid_yen,
+	ff.price_low_yen,
+	ff.trend_label,
+	ff.source_file,
+	ff.source_row_no,
+	COUNT(*) OVER() AS total_count
+FROM filtered_fact ff
+JOIN dim_market m ON m.id = ff.market_id
+JOIN dim_item i ON i.id = ff.item_id
+JOIN dim_origin o ON o.id = ff.origin_id
+JOIN dim_grade g ON g.id = ff.grade_id
+ORDER BY ` + orderBy + ` ` + order + `
 LIMIT ? OFFSET ?`
 
-	countQuery := `
-SELECT COUNT(1)
-FROM fact_prices_daily f
-JOIN dim_market m ON m.id = f.market_id
-JOIN dim_item i ON i.id = f.item_id
-JOIN dim_origin o ON o.id = f.origin_id
-` + latestWhereSQL
-
-	rows := make([]dailyRow, 0, limit)
-	if err := h.observeDB("prices_latest_list", func() error {
-		return h.db.WithContext(ctx).Raw(query, append(latestWhereArgs, limit, offset)...).Scan(&rows).Error
+	pageRows := make([]dailyRowWithTotal, 0, limit)
+	if err := h.observeDB("prices_latest_page", func() error {
+		return h.db.WithContext(ctx).Raw(query, append(latestWhereArgs, limit, offset)...).Scan(&pageRows).Error
 	}); err != nil {
 		writeErr(w, http.StatusInternalServerError, "DB_ERROR", "query failed")
 		return
 	}
-	for i := range rows {
-		rows[i].ItemTotal = roundFloatPtr2(rows[i].ItemTotal)
-		rows[i].ArrivalTon = roundFloatPtr2(rows[i].ArrivalTon)
-	}
 
+	rows := make([]dailyRow, 0, len(pageRows))
 	var total int64
-	if err := h.observeDB("prices_latest_count", func() error {
-		return h.db.WithContext(ctx).Raw(countQuery, latestWhereArgs...).Scan(&total).Error
-	}); err != nil {
-		writeErr(w, http.StatusInternalServerError, "DB_ERROR", "count failed")
-		return
+	if len(pageRows) > 0 {
+		total = pageRows[0].TotalCount
+		for i := range pageRows {
+			row := pageRows[i].DailyRow
+			row.ItemTotal = roundFloatPtr2(row.ItemTotal)
+			row.ArrivalTon = roundFloatPtr2(row.ArrivalTon)
+			rows = append(rows, row)
+		}
 	}
 
-	meta := apiMeta{"latest_trade_date": *latestTradeDate, "limit": limit, "offset": offset, "total": total}
+	meta := apiMeta{"latest_trade_date": latestTradeDate, "limit": limit, "offset": offset, "total": total}
 	writeOK(w, rows, meta)
 }
 
@@ -285,7 +347,24 @@ func (h *Service) handlePricesTrend(w http.ResponseWriter, r *http.Request) {
 		writeMissingRequiredParams(w, "item_code")
 		return
 	}
-	whereSQL, whereArgs, defaultFrom, err := buildPriceFilters(r, false)
+	ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
+	defer cancel()
+
+	ids, err := h.resolveCodeIDs(ctx,
+		strings.TrimSpace(r.URL.Query().Get("item_code")),
+		strings.TrimSpace(r.URL.Query().Get("market_code")),
+		strings.TrimSpace(r.URL.Query().Get("origin_code")),
+	)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "DB_ERROR", "query failed")
+		return
+	}
+	if ids == nil || ids.ItemID == nil {
+		writeOK(w, []trendRow{}, apiMeta{"total": 0})
+		return
+	}
+
+	whereSQL, whereArgs, defaultFrom, err := buildFactPriceFilters(r.URL.Query(), ids, false)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "INVALID_ARGUMENT", err.Error())
 		return
@@ -300,16 +379,11 @@ SELECT
 	MIN(f.price_mid_yen) AS min_price_mid_yen,
 	SUM(f.arrival_ton)::float8 AS arrival_ton_sum
 FROM fact_prices_daily f
-JOIN dim_market m ON m.id = f.market_id
-JOIN dim_item i ON i.id = f.item_id
-JOIN dim_origin o ON o.id = f.origin_id
 ` + whereSQL + `
 GROUP BY f.trade_date
 HAVING COUNT(f.price_mid_yen) > 0
 ORDER BY f.trade_date ASC`
 
-	ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
-	defer cancel()
 	rows := make([]trendRow, 0, 64)
 	if err := h.observeDB("prices_trend", func() error {
 		return h.db.WithContext(ctx).Raw(query, whereArgs...).Scan(&rows).Error
@@ -390,7 +464,24 @@ func (h *Service) handlePricesSummary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	whereSQL, whereArgs, defaultFrom, err := buildPriceFilters(r, false)
+	ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
+	defer cancel()
+
+	ids, err := h.resolveCodeIDs(ctx,
+		strings.TrimSpace(r.URL.Query().Get("item_code")),
+		strings.TrimSpace(r.URL.Query().Get("market_code")),
+		strings.TrimSpace(r.URL.Query().Get("origin_code")),
+	)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "DB_ERROR", "query failed")
+		return
+	}
+	if ids == nil || ids.ItemID == nil {
+		writeOK(w, []summaryRow{}, apiMeta{"group_by": groupBy, "total": 0})
+		return
+	}
+
+	whereSQL, whereArgs, defaultFrom, err := buildFactPriceFilters(r.URL.Query(), ids, false)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "INVALID_ARGUMENT", err.Error())
 		return
@@ -403,15 +494,10 @@ SELECT
 	AVG(f.price_mid_yen)::float8 AS avg_price_mid_yen,
 	SUM(f.arrival_ton)::float8 AS arrival_ton_sum
 FROM fact_prices_daily f
-JOIN dim_market m ON m.id = f.market_id
-JOIN dim_item i ON i.id = f.item_id
-JOIN dim_origin o ON o.id = f.origin_id
 ` + whereSQL + `
 GROUP BY period
 ORDER BY period ASC`
 
-	ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
-	defer cancel()
 	rows := make([]summaryRow, 0, 64)
 	if err := h.observeDB("prices_summary", func() error {
 		return h.db.WithContext(ctx).Raw(query, whereArgs...).Scan(&rows).Error
@@ -468,6 +554,19 @@ func (h *Service) handleCompareMarkets(w http.ResponseWriter, r *http.Request) {
 	}
 	order := parseOrder(r.URL.Query().Get("order"))
 
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	ids, err := h.resolveCodeIDs(ctx, itemCode, "", "")
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "DB_ERROR", "query failed")
+		return
+	}
+	if ids == nil || ids.ItemID == nil {
+		writeOK(w, []compareMarketRow{}, apiMeta{"metric": metric, "total": 0})
+		return
+	}
+
 	query := `
 		SELECT
 			m.market_code,
@@ -476,16 +575,12 @@ func (h *Service) handleCompareMarkets(w http.ResponseWriter, r *http.Request) {
 			` + metricExpr + ` AS metric_value
 		FROM fact_prices_daily f
 		JOIN dim_market m ON m.id = f.market_id
-		JOIN dim_item i ON i.id = f.item_id
-		WHERE f.trade_date = ? AND i.item_code = ?
+		WHERE f.trade_date = ? AND f.item_id = ?
 		GROUP BY m.market_code, m.market_name
 		ORDER BY metric_value ` + order + `, m.market_code ASC`
-
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-	defer cancel()
 	rows := make([]compareMarketRow, 0, 64)
 	if err := h.observeDB("compare_markets", func() error {
-		return h.db.WithContext(ctx).Raw(query, date, itemCode).Scan(&rows).Error
+		return h.db.WithContext(ctx).Raw(query, date, *ids.ItemID).Scan(&rows).Error
 	}); err != nil {
 		writeErr(w, http.StatusInternalServerError, "DB_ERROR", "query failed")
 		return
@@ -531,6 +626,10 @@ func (h *Service) handleRankingsItems(w http.ResponseWriter, r *http.Request) {
 	order := parseOrder(r.URL.Query().Get("order"))
 	limit := clampInt(parseIntOrDefault(r.URL.Query().Get("limit"), 50), 1, 500)
 
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	var marketID *uint
 	where := "WHERE f.trade_date = ?"
 	args := []any{date}
 	marketCode := strings.TrimSpace(r.URL.Query().Get("market_code"))
@@ -539,8 +638,18 @@ func (h *Service) handleRankingsItems(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, "INVALID_ARGUMENT", err.Error())
 			return
 		}
-		where += " AND m.market_code = ?"
-		args = append(args, marketCode)
+		ids, err := h.resolveCodeIDs(ctx, "", marketCode, "")
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, "DB_ERROR", "query failed")
+			return
+		}
+		if ids == nil || ids.MarketID == nil {
+			writeOK(w, []rankingItemRow{}, apiMeta{"metric": metric, "limit": limit, "total": 0})
+			return
+		}
+		marketID = ids.MarketID
+		where += " AND f.market_id = ?"
+		args = append(args, *marketID)
 	}
 
 	query := `
@@ -551,7 +660,6 @@ SELECT
 	` + metricExpr + ` AS metric_value
 FROM fact_prices_daily f
 JOIN dim_item i ON i.id = f.item_id
-JOIN dim_market m ON m.id = f.market_id
 ` + where + `
 GROUP BY i.item_code, i.item_name
 HAVING ` + metricCountExpr + ` > 0
@@ -559,8 +667,6 @@ ORDER BY metric_value ` + order + ` NULLS LAST, i.item_code ASC
 LIMIT ?`
 	args = append(args, limit)
 
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-	defer cancel()
 	rows := make([]rankingItemRow, 0, limit)
 	if err := h.observeDB("rankings_items", func() error {
 		return h.db.WithContext(ctx).Raw(query, args...).Scan(&rows).Error
@@ -580,4 +686,158 @@ func roundFloatPtr2(v *float64) *float64 {
 	}
 	r := math.Round((*v)*100) / 100
 	return &r
+}
+
+func parseDailySortColumn(sort string) string {
+	switch sort {
+	case "f.trade_date":
+		return "trade_date"
+	case "m.market_code":
+		return "market_code"
+	case "i.item_code":
+		return "item_code"
+	case "o.origin_code":
+		return "origin_code"
+	case "f.price_mid_yen":
+		return "price_mid_yen"
+	case "f.arrival_ton":
+		return "arrival_ton"
+	default:
+		panic(fmt.Sprintf("unsupported daily sort column: %s", sort))
+	}
+}
+
+type latestFilterIDs struct {
+	ItemID   *uint
+	MarketID *uint
+	OriginID *uint
+}
+
+func (h *Service) resolveCodeIDs(ctx context.Context, itemCode, marketCode, originCode string) (*latestFilterIDs, error) {
+	ids := &latestFilterIDs{}
+
+	if itemCode != "" {
+		var item model.DimItem
+		if err := h.observeDB("prices_lookup_item", func() error {
+			return h.db.WithContext(ctx).Select("id").Where("item_code = ?", itemCode).First(&item).Error
+		}); err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, nil
+			}
+			return nil, err
+		}
+		ids.ItemID = &item.ID
+	}
+
+	if marketCode != "" {
+		var market model.DimMarket
+		if err := h.observeDB("prices_lookup_market", func() error {
+			return h.db.WithContext(ctx).Select("id").Where("market_code = ?", marketCode).First(&market).Error
+		}); err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, nil
+			}
+			return nil, err
+		}
+		ids.MarketID = &market.ID
+	}
+
+	if originCode != "" {
+		var origin model.DimOrigin
+		if err := h.observeDB("prices_lookup_origin", func() error {
+			return h.db.WithContext(ctx).Select("id").Where("origin_code = ?", originCode).First(&origin).Error
+		}); err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, nil
+			}
+			return nil, err
+		}
+		ids.OriginID = &origin.ID
+	}
+
+	return ids, nil
+}
+
+func buildFactLatestFilters(ids *latestFilterIDs, latestTradeDate string) (string, []any) {
+	clauses := []string{"f.trade_date = ?", "f.item_id = ?"}
+	args := []any{latestTradeDate, *ids.ItemID}
+	if ids.MarketID != nil {
+		clauses = append(clauses, "f.market_id = ?")
+		args = append(args, *ids.MarketID)
+	}
+	if ids.OriginID != nil {
+		clauses = append(clauses, "f.origin_id = ?")
+		args = append(args, *ids.OriginID)
+	}
+	return "WHERE " + strings.Join(clauses, " AND "), args
+}
+
+func buildFactPriceFilters(q url.Values, ids *latestFilterIDs, includeSingleDate bool) (string, []any, *string, error) {
+	clauses, args, defaultFrom, err := buildFactDateClauses(q, includeSingleDate)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	if ids == nil || ids.ItemID == nil {
+		return "", nil, defaultFrom, nil
+	}
+	clauses = append(clauses, "f.item_id = ?")
+	args = append(args, *ids.ItemID)
+	if ids.MarketID != nil {
+		clauses = append(clauses, "f.market_id = ?")
+		args = append(args, *ids.MarketID)
+	}
+	if ids.OriginID != nil {
+		clauses = append(clauses, "f.origin_id = ?")
+		args = append(args, *ids.OriginID)
+	}
+	return "WHERE " + strings.Join(clauses, " AND "), args, defaultFrom, nil
+}
+
+func buildFactDateClauses(q url.Values, includeSingleDate bool) ([]string, []any, *string, error) {
+	clauses := make([]string, 0, 8)
+	args := make([]any, 0, 8)
+	var defaultFrom *string
+	date := strings.TrimSpace(q.Get("date"))
+	from := strings.TrimSpace(q.Get("from"))
+	to := strings.TrimSpace(q.Get("to"))
+
+	if includeSingleDate && date != "" {
+		if _, err := mustParseDate(date, "date"); err != nil {
+			return nil, nil, nil, err
+		}
+		clauses = append(clauses, "f.trade_date = ?")
+		args = append(args, date)
+	}
+
+	var fromDate, toDate *time.Time
+	if from != "" {
+		d, err := mustParseDate(from, "from")
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		fromDate = &d
+		clauses = append(clauses, "f.trade_date >= ?")
+		args = append(args, from)
+	}
+	if to != "" {
+		d, err := mustParseDate(to, "to")
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		toDate = &d
+		clauses = append(clauses, "f.trade_date <= ?")
+		args = append(args, to)
+	}
+	if err := validateDateRange(fromDate, toDate); err != nil {
+		return nil, nil, nil, err
+	}
+
+	if date == "" && fromDate == nil && toDate == nil {
+		df := time.Now().AddDate(0, 0, -defaultRecentDays).Format("2006-01-02")
+		defaultFrom = &df
+		clauses = append(clauses, "f.trade_date >= ?")
+		args = append(args, df)
+	}
+
+	return clauses, args, defaultFrom, nil
 }
