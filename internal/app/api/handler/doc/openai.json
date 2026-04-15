@@ -196,8 +196,7 @@
         ],
         "meta": {
           "limit": 10,
-          "offset": 0,
-          "total": 1
+          "offset": 0
         }
       },
       "query": {
@@ -215,7 +214,6 @@
       "meta_fields": [
         "limit",
         "offset",
-        "total",
         "default_from (present when auto-applied)",
         "default_window_days (present when auto-applied)"
       ]

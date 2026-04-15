@@ -149,7 +149,7 @@ Production deployments for this project additionally enforce access control and 
   - Optional: `date`, `from`, `to`, `market_code`, `origin_code`, `limit`, `offset`, `sort`, `order`
   - `date` is supported only on this endpoint among the main price list/aggregate APIs
   - If `date/from/to` are all omitted, a default recent filter is applied with `from = today - 31 days`
-  - Response `meta`: `limit`, `offset`, `total`, and `default_from` / `default_window_days` when auto-applied
+  - Response `meta`: `limit`, `offset`, and `default_from` / `default_window_days` when auto-applied
 
 - `GET /v1/prices/latest`
   - Required: `item_code`
@@ -205,6 +205,24 @@ Production deployments for this project additionally enforce access control and 
 - Reverse proxy, IP restriction, or Cloudflare rules are recommended for `/monitoring`, `/metrics`, and `/doc` in public deployments
 - Restrict `/doc`, `/doc-llm`, `/monitoring/*`, `/metrics`, `/ready`, and ingestion-related routes to administrators or internal networks
 - Production environment uses Cloudflare access controls and burst protection in addition to Nginx access rules
+
+## Performance Summary
+- Measured production target:
+  - `https://jp-vgfr-api.seungpyo.xyz`
+- Production sizing used during measurement:
+  - `1 CPU / 1 GB RAM`
+- Current operational conclusion:
+  - maximum throughput at the `p95 < 1s` target is about `110 req/s`
+  - conservative operational ceiling is `100 req/s`
+- Measurement approach:
+  - `k6`
+  - `tests/stress/p95_one_second_breakpoint.js`
+  - item/date rotation enabled to reduce cache-only bias
+- Supporting notes:
+  - `50 -> 60 -> 70 -> 80 -> 90 req/s` staged run stayed well under `p95 100ms`
+  - `50 -> 105 -> 110 -> 115 -> 120 req/s` staged run ended near the boundary at `p95 978.79ms`
+  - `100 -> 120 -> 140 -> 160 -> 180 req/s` exceeded the target with `p95 1603.81ms`
+  - detailed summary: `plan/api_performance_resume.md`
 
 ## Data Workflow
 1. `downloader` fetches source CSV files from the MAFF portal
