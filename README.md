@@ -1,5 +1,7 @@
 # Japan Fruit & Vegetable Data API
 
+[日本語 README](./README.ja.md)
+
 This project collects Japanese fruit/vegetable wholesale data, normalizes it, stores it in PostgreSQL, and serves it through a query API.
 
 ## Project Goal
@@ -19,6 +21,8 @@ This project collects Japanese fruit/vegetable wholesale data, normalizes it, st
 - Source website: MAFF wholesale market data portal (Japan)
   - https://www.seisen.maff.go.jp/seisen/bs04b040md001/BS04B040UC010SC999-Evt001.do
 - This project fetches and transforms publicly accessible CSV data from that portal.
+- The source domain `seisen.maff.go.jp` is a MAFF wholesale market / produce market data source covering Japanese fruit and vegetable wholesale price data.
+- The repository is intended for users looking for Japanese wholesale produce data, market price history, item-level trend data, and CSV-based market data workflows.
 - Data rights and usage conditions belong to the original provider.
 - This repository is an independent implementation and is not affiliated with MAFF.
 
