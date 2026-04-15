@@ -259,12 +259,19 @@ go run ./cmd/downloader -date 20260412 -out ./data/data_downloads
 
 Run API integration tests:
 ```bash
-RUN_API_INTEGRATION_TESTS=1 API_BASE_URL=http://localhost:8080 go test ./tests/api -count=1
+RUN_API_INTEGRATION_TESTS=1 API_BASE_URL=http://localhost:8080 go test ./tests/unit/api -count=1
 ```
 
 Run pipeline integration tests:
 ```bash
-RUN_PIPELINE_INTEGRATION_TESTS=1 go test ./tests/pipeline -count=1
+RUN_PIPELINE_INTEGRATION_TESTS=1 go test ./tests/unit/pipeline -count=1
+```
+
+Run stress tests with `k6`:
+```bash
+k6 run tests/stress/baseline.js
+k6 run tests/stress/step_read.js
+k6 run tests/stress/mixed_read.js
 ```
 
 ## Project Structure
@@ -272,7 +279,82 @@ RUN_PIPELINE_INTEGRATION_TESTS=1 go test ./tests/pipeline -count=1
 - `internal/`: domain, handler, and platform logic
 - `scripts/`: operational scripts
 - `docker/`: nginx and cron settings
-- `tests/`: unit/integration tests
+- `tests/unit/`: unit and integration tests
+- `tests/stress/`: `k6` stress test scripts and result artifacts
+
+## Stress Testing
+
+### Current setup
+- Stress test scripts live under [tests/stress](./tests/stress)
+- Result JSON files are stored under [tests/stress/result](./tests/stress/result)
+- The current default target is the production API:
+  - `https://jp-vgfr-api.seungpyo.xyz`
+
+### Current production test target
+- API server: `1 vCPU / 1GB RAM`
+- PostgreSQL server: `1 vCPU / 1GB RAM`
+
+This means tail latency under aggregation-heavy load is expected to rise earlier than on a larger deployment.
+
+### Current `k6` profiles
+- `baseline.js`
+  - 5 VUs for 2 minutes
+  - low-risk smoke/baseline check
+- `step_read.js`
+  - 5 -> 10 -> 20 -> 30 VUs
+  - conservative production-safe staged read test
+- `mixed_read.js`
+  - 10 -> 15 -> 15 VUs
+  - conservative read load while ingestion runs in parallel
+
+### Current observed results
+
+Baseline result from `tests/stress/result/baseline.json`:
+- total requests: `580`
+- request rate: about `4.80 req/s`
+- p95 latency: about `50.19ms`
+- average latency: about `37.88ms`
+- max latency: about `215.10ms`
+- request checks: `580/580` passed
+
+Step-read result from `tests/stress/result/step_read.json`:
+- total requests: `9328`
+- request rate: about `11.94 req/s`
+- p95 latency: about `679.06ms`
+- average latency: about `119.75ms`
+- max latency: about `4525.22ms`
+- failed request rate: about `0.01%`
+- request checks: `9327/9328` passed
+
+### Interpretation
+- On this hardware profile, baseline performance is strong.
+- Under staged read load, median latency remains acceptable, but tail latency rises significantly.
+- The system still remains mostly available under the current conservative production-safe load.
+- The likely source of tail latency is aggregation-heavy endpoints such as:
+  - `/v1/prices/trend`
+  - `/v1/prices/summary`
+  - `/v1/rankings/items`
+
+### What to look at when analyzing results
+- `http_req_failed`
+- `http_req_duration` p50 / p95 / p99
+- max latency spikes
+- `/metrics`
+- `docker stats`
+- `pg_stat_activity`
+- `pg_stat_statements`
+
+### Recommended optimization ideas
+- Add short-TTL caching for:
+  - `/v1/coverage`
+  - `/v1/prices/latest`
+  - `/v1/prices/trend`
+  - `/v1/prices/summary`
+  - `/v1/rankings/items`
+- Consider summary tables or materialized views for aggregation-heavy endpoints.
+- Keep the normalized source-of-truth fact table, but introduce pre-aggregated read models for trend/summary/ranking queries.
+- If read/write contention becomes an issue during mixed load, consider a read replica before introducing more complex DB partitioning or sharding.
+- Add new indexes only after confirming slow-query patterns with `pg_stat_statements` and `EXPLAIN ANALYZE`.
 
 ## Architecture Diagram
 ```text
