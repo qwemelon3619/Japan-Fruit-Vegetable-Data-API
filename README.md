@@ -421,8 +421,6 @@ k6 run tests/stress/p95_one_second_breakpoint.js
 - `fact_prices_daily`: normalized daily wholesale fact rows
 - `ingestion_runs`, `ingestion_files`: ingestion audit metadata
 
-Full SQL-oriented schema notes live in [DB_API_SQL_REFERENCE.md](./plan/DB_API_SQL_REFERENCE.md).
-
 ### Why these keys
 - `dim_market.market_code`, `dim_item.item_code`, `dim_origin.origin_code` are unique because codes are the canonical API filter keys.
 - `dim_grade` uses a composite unique key because no single source code identifies grade/class/product/unit-weight combinations.

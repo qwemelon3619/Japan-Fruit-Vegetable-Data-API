@@ -343,27 +343,27 @@ k6 run tests/stress/p95_one_second_breakpoint.js
 ## アーキテクチャ図
 ```text
                         +-----------------------------+
-                        | MAFF 卸売データポータル     |
-                        | seisen.maff.go.jp          |
+                        | MAFF 卸売データポータル          |
+                        | seisen.maff.go.jp           |
                         +-------------+---------------+
                                       |
                                       | CSV / HTML fetch
                                       v
                     +---------------------------------------+
                     | downloader                            |
-                    | - 日付 / 期間取得                     |
-                    | - Shift-JIS -> UTF-8 変換            |
-                    | - 日次マージ済み CSV 出力             |
+                    | - 日付 / 期間取得                         |
+                    | - Shift-JIS -> UTF-8 変換              |
+                    | - 日次マージ済み CSV 出力                  |
                     +-------------------+-------------------+
                                         |
                                         | utf8/<YYYYMMDD>/all_<YYYYMMDD>.csv
                                         v
                     +---------------------------------------+
                     | ingestor                              |
-                    | - 解析 + 検証                         |
-                    | - ディメンション upsert               |
+                    | - 解析 + 検証                           |
+                    | - ディメンション upsert                   |
                     | - fact stage copy                     |
-                    | - source_file,row_no で fact merge    |
+                    | - source_file,row_no で fact merge     |
                     +-------------------+-------------------+
                                         |
                             +-----------+------------+
@@ -420,8 +420,6 @@ k6 run tests/stress/p95_one_second_breakpoint.js
 - `dim_grade`: 等級 / 階級 / 品種 / 単位重量の複合ディメンション
 - `fact_prices_daily`: 正規化された日次卸売ファクト行
 - `ingestion_runs`, `ingestion_files`: 取り込み監査メタデータ
-
-完全な SQL 指向のスキーマノートは [DB_API_SQL_REFERENCE.md](./plan/DB_API_SQL_REFERENCE.md) にあります。
 
 ### これらのキーを使う理由
 - `dim_market.market_code`, `dim_item.item_code`, `dim_origin.origin_code` は、コードが API の正規フィルタキーであるため一意です。
