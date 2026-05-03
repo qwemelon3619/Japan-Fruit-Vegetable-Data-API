@@ -8,6 +8,7 @@ RUN go mod download
 
 COPY cmd ./cmd
 COPY internal ./internal
+COPY proto ./proto
 
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o /out/downloader ./cmd/downloader && \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o /out/ingestor ./cmd/ingestor && \
@@ -31,7 +32,7 @@ RUN chmod +x /usr/local/bin/downloader /usr/local/bin/ingestor /usr/local/bin/ap
 ENV TZ=Asia/Tokyo \
     DATA_ROOT=/data
 
-EXPOSE 8080
+EXPOSE 8080 9090
 
 ENTRYPOINT ["/bin/bash", "-lc"]
 CMD ["daily_download_ingest.sh"]
