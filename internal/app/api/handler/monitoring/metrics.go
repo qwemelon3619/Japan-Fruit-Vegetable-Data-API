@@ -18,11 +18,18 @@ type httpLatencyKey struct {
 	Path   string
 }
 
+type grpcRequestKey struct {
+	Method      string
+	StatusClass string
+}
+
 type metricsStore struct {
 	mu sync.Mutex
 
 	httpRequests map[httpRequestKey]uint64
 	httpLatency  map[httpLatencyKey]*histogram
+	grpcRequests map[grpcRequestKey]uint64
+	grpcLatency  map[string]*histogram
 	dbLatency    map[string]*histogram
 	dbErrors     map[string]uint64
 	inflight     int64
@@ -32,6 +39,8 @@ func newMetricsStore() *metricsStore {
 	return &metricsStore{
 		httpRequests: make(map[httpRequestKey]uint64, 64),
 		httpLatency:  make(map[httpLatencyKey]*histogram, 64),
+		grpcRequests: make(map[grpcRequestKey]uint64, 16),
+		grpcLatency:  make(map[string]*histogram, 16),
 		dbLatency:    make(map[string]*histogram, 64),
 		dbErrors:     make(map[string]uint64, 64),
 	}
@@ -81,6 +90,28 @@ func (m *metricsStore) observeDB(query string, seconds float64, err error) {
 	if err != nil {
 		m.dbErrors[query]++
 	}
+}
+
+func (m *metricsStore) observeGRPC(method string, seconds float64, err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	rKey := grpcRequestKey{Method: method, StatusClass: grpcStatusClass(err)}
+	m.grpcRequests[rKey]++
+
+	h := m.grpcLatency[method]
+	if h == nil {
+		h = newHistogram()
+		m.grpcLatency[method] = h
+	}
+	h.observe(seconds)
+}
+
+func grpcStatusClass(err error) string {
+	if err != nil {
+		return "error"
+	}
+	return "ok"
 }
 
 func (m *metricsStore) renderPrometheus() string {
@@ -141,6 +172,34 @@ func (m *metricsStore) renderPrometheus() string {
 	sort.Strings(dbKeys)
 	for _, k := range dbKeys {
 		m.dbLatency[k].render(&sb, "db_query_duration_seconds", map[string]string{"query": k})
+	}
+
+	sb.WriteString("# HELP grpc_requests_total Total number of gRPC requests\n")
+	sb.WriteString("# TYPE grpc_requests_total counter\n")
+	grpcReqKeys := make([]grpcRequestKey, 0, len(m.grpcRequests))
+	for k := range m.grpcRequests {
+		grpcReqKeys = append(grpcReqKeys, k)
+	}
+	sort.Slice(grpcReqKeys, func(i, j int) bool {
+		if grpcReqKeys[i].Method != grpcReqKeys[j].Method {
+			return grpcReqKeys[i].Method < grpcReqKeys[j].Method
+		}
+		return grpcReqKeys[i].StatusClass < grpcReqKeys[j].StatusClass
+	})
+	for _, k := range grpcReqKeys {
+		sb.WriteString(fmt.Sprintf("grpc_requests_total{method=\"%s\",status=\"%s\"} %d\n",
+			escapeLabel(k.Method), escapeLabel(k.StatusClass), m.grpcRequests[k]))
+	}
+
+	sb.WriteString("# HELP grpc_request_duration_seconds gRPC request duration in seconds\n")
+	sb.WriteString("# TYPE grpc_request_duration_seconds histogram\n")
+	grpcLatKeys := make([]string, 0, len(m.grpcLatency))
+	for k := range m.grpcLatency {
+		grpcLatKeys = append(grpcLatKeys, k)
+	}
+	sort.Strings(grpcLatKeys)
+	for _, k := range grpcLatKeys {
+		m.grpcLatency[k].render(&sb, "grpc_request_duration_seconds", map[string]string{"method": k})
 	}
 
 	sb.WriteString("# HELP db_errors_total Total number of DB query errors\n")

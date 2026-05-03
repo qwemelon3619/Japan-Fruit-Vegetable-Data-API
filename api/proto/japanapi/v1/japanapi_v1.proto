@@ -1,0 +1,339 @@
+syntax = "proto3";
+
+package japanapi.v1;
+
+option go_package = "japan_data_project/proto/japanapi/v1;japanapiv1";
+
+// ============================================================================
+// Coverage Service
+// ============================================================================
+
+service CoverageService {
+  rpc GetCoverage(GetCoverageRequest) returns (GetCoverageResponse);
+}
+
+message GetCoverageRequest {}
+
+message GetCoverageResponse {
+  string earliest_trade_date = 1;
+  string latest_trade_date = 2;
+  int64 fact_rows_total = 3;
+  optional uint32 last_ingestion_run_id = 4;
+  optional string last_ingestion_status = 5;
+  optional string last_ingestion_run_type = 6;
+  optional string last_ingestion_finished_at = 7;
+}
+
+// ============================================================================
+// Dimension Service
+// ============================================================================
+
+service DimensionService {
+  rpc ListMarkets(ListMarketsRequest) returns (ListMarketsResponse);
+  rpc ListItems(ListItemsRequest) returns (ListItemsResponse);
+  rpc ListOrigins(ListOriginsRequest) returns (ListOriginsResponse);
+}
+
+message DimensionFilter {
+  int32 limit = 1;   // default 50, max 500
+  int32 offset = 2;  // default 0
+  string q = 3;      // search query (code or name LIKE)
+  string sort = 4;   // "code", "name", "id" (default "name")
+  string order = 5;  // "asc" or "desc" (default "desc")
+}
+
+message ListMarketsRequest {
+  DimensionFilter filter = 1;
+}
+
+message ListMarketsResponse {
+  repeated DimensionRow data = 1;
+  int32 limit = 2;
+  int32 offset = 3;
+  int64 total = 4;
+}
+
+message ListItemsRequest {
+  DimensionFilter filter = 1;
+}
+
+message ListItemsResponse {
+  repeated DimensionRow data = 1;
+  int32 limit = 2;
+  int32 offset = 3;
+  int64 total = 4;
+}
+
+message ListOriginsRequest {
+  DimensionFilter filter = 1;
+}
+
+message ListOriginsResponse {
+  repeated DimensionRow data = 1;
+  int32 limit = 2;
+  int32 offset = 3;
+  int64 total = 4;
+}
+
+message DimensionRow {
+  uint32 id = 1;
+  string code = 2;
+  string name = 3;
+}
+
+// ============================================================================
+// Price Service (Phase 2+)
+// ============================================================================
+
+service PriceService {
+  rpc GetDailyPrices(GetDailyPricesRequest) returns (GetDailyPricesResponse);
+  rpc GetLatestPrices(GetLatestPricesRequest) returns (GetLatestPricesResponse);
+  rpc GetPriceTrend(GetPriceTrendRequest) returns (GetPriceTrendResponse);
+  rpc GetPriceSummary(GetPriceSummaryRequest) returns (GetPriceSummaryResponse);
+}
+
+message DateRangeFilter {
+  optional string date = 1;   // exact date YYYY-MM-DD
+  optional string from = 2;   // range start YYYY-MM-DD
+  optional string to = 3;     // range end YYYY-MM-DD
+}
+
+message PriceFilter {
+  string item_code = 1;       // required
+  optional string market_code = 2;
+  optional string origin_code = 3;
+  DateRangeFilter date_range = 4;
+  int32 limit = 5;            // default 100, max 2000
+  int32 offset = 6;           // default 0
+  string sort = 7;            // sort column
+  string order = 8;           // "asc" or "desc"
+}
+
+message GetDailyPricesRequest {
+  PriceFilter filter = 1;
+}
+
+message DailyPriceRow {
+  string trade_date = 1;
+  string weekday_ja = 2;
+  string market_code = 3;
+  string market_name = 4;
+  string item_code = 5;
+  string item_name = 6;
+  string origin_code = 7;
+  string origin_name = 8;
+  string grade = 9;
+  string class = 10;
+  string product_name = 11;
+  string unit_weight = 12;
+  optional double item_total_ton = 13;
+  optional double arrival_ton = 14;
+  optional int32 price_high_yen = 15;
+  optional int32 price_mid_yen = 16;
+  optional int32 price_low_yen = 17;
+  optional string trend_label = 18;
+  string source_file = 19;
+  int32 source_row_no = 20;
+}
+
+message GetDailyPricesResponse {
+  repeated DailyPriceRow data = 1;
+  int32 limit = 2;
+  int32 offset = 3;
+  optional int64 total = 4;
+  optional string default_from = 5;
+  optional int32 default_window_days = 6;
+}
+
+message GetLatestPricesRequest {
+  string item_code = 1;       // required
+  optional string market_code = 2;
+  optional string origin_code = 3;
+  int32 limit = 4;            // default 100, max 2000
+  int32 offset = 5;
+  string sort = 6;
+  string order = 7;
+}
+
+message GetLatestPricesResponse {
+  repeated DailyPriceRow data = 1;
+  string latest_trade_date = 2;
+  int32 limit = 3;
+  int32 offset = 4;
+  int64 total = 5;
+}
+
+message GetPriceTrendRequest {
+  string item_code = 1;       // required
+  optional string market_code = 2;
+  optional string origin_code = 3;
+  DateRangeFilter date_range = 4;
+  // Preset: "1m", "6m", "1y", or empty for custom range
+  string preset = 5;
+}
+
+message TrendRow {
+  string trade_date = 1;
+  int64 rows_count = 2;
+  optional double avg_price_mid_yen = 3;
+  optional int32 max_price_mid_yen = 4;
+  optional int32 min_price_mid_yen = 5;
+  optional double arrival_ton_sum = 6;
+}
+
+message GetPriceTrendResponse {
+  repeated TrendRow data = 1;
+  optional int64 total = 2;
+  optional string default_from = 3;
+  optional int32 default_window_days = 4;
+}
+
+message GetPriceSummaryRequest {
+  string item_code = 1;
+  optional string market_code = 2;
+  optional string origin_code = 3;
+  DateRangeFilter date_range = 4;
+  string group_by = 5;  // "day", "week", "month"
+}
+
+message SummaryRow {
+  string period = 1;
+  int64 rows_count = 2;
+  optional double avg_price_mid_yen = 3;
+  optional double arrival_ton_sum = 4;
+}
+
+message GetPriceSummaryResponse {
+  repeated SummaryRow data = 1;
+  optional int64 total = 2;
+  optional string default_from = 3;
+  optional int32 default_window_days = 4;
+}
+
+// ============================================================================
+// Analysis Service (Phase 3+)
+// ============================================================================
+
+service AnalysisService {
+  rpc CompareMarkets(CompareMarketsRequest) returns (CompareMarketsResponse);
+  rpc RankItems(RankItemsRequest) returns (RankItemsResponse);
+}
+
+message CompareMarketsRequest {
+  string date = 1;            // required YYYY-MM-DD
+  string item_code = 2;      // required
+  string metric = 3;         // "price_mid" or "arrival" (default "price_mid")
+  string order = 4;          // "asc" or "desc" (default "desc")
+}
+
+message CompareMarketRow {
+  string market_code = 1;
+  string market_name = 2;
+  int64 rows_count = 3;
+  optional double metric_value = 4;
+}
+
+message CompareMarketsResponse {
+  repeated CompareMarketRow data = 1;
+  string metric = 2;
+  int64 total = 3;
+}
+
+message RankItemsRequest {
+  string date = 1;            // required YYYY-MM-DD
+  string metric = 2;         // "arrival" or "price_mid" (default "arrival")
+  optional string market_code = 3;
+  int32 limit = 4;           // default 50, max 500
+  string order = 5;          // "asc" or "desc"
+}
+
+message RankingItemRow {
+  string item_code = 1;
+  string item_name = 2;
+  int64 rows_count = 3;
+  optional double metric_value = 4;
+}
+
+message RankItemsResponse {
+  repeated RankingItemRow data = 1;
+  string metric = 2;
+  int32 limit = 3;
+  int64 total = 4;
+}
+
+// ============================================================================
+// Ingestion Service (Phase 3+)
+// ============================================================================
+
+service IngestionService {
+  rpc ListIngestionRuns(ListIngestionRunsRequest) returns (ListIngestionRunsResponse);
+  rpc ListIngestionFiles(ListIngestionFilesRequest) returns (ListIngestionFilesResponse);
+}
+
+message ListIngestionRunsRequest {
+  int32 limit = 1;  // default 50, max 500
+  int32 offset = 2;
+}
+
+message IngestionRunRow {
+  uint32 id = 1;
+  string run_type = 2;
+  string started_at = 3;
+  optional string finished_at = 4;
+  string status = 5;
+  optional string error_message = 6;
+}
+
+message ListIngestionRunsResponse {
+  repeated IngestionRunRow data = 1;
+  int32 limit = 2;
+  int32 offset = 3;
+  int64 total = 4;
+}
+
+message ListIngestionFilesRequest {
+  optional uint32 run_id = 1;
+  int32 limit = 2;   // default 100, max 1000
+  int32 offset = 3;
+}
+
+message IngestionFileRow {
+  uint32 id = 1;
+  uint32 run_id = 2;
+  string file_path = 3;
+  string file_hash = 4;
+  int32 rows_total = 5;
+  int32 rows_ok = 6;
+  int32 rows_error = 7;
+  string status = 8;
+}
+
+message ListIngestionFilesResponse {
+  repeated IngestionFileRow data = 1;
+  int32 limit = 2;
+  int32 offset = 3;
+  int64 total = 4;
+}
+
+// ============================================================================
+// Health / System Service (Phase 3+)
+// ============================================================================
+
+service SystemService {
+  rpc GetHealth(GetHealthRequest) returns (GetHealthResponse);
+  rpc GetReady(GetReadyRequest) returns (GetReadyResponse);
+}
+
+message GetHealthRequest {}
+
+message GetHealthResponse {
+  string status = 1;  // "ok"
+}
+
+message GetReadyRequest {}
+
+message GetReadyResponse {
+  bool ready = 1;
+  string database = 2;
+  optional string error = 3;
+}

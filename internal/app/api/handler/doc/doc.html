@@ -94,6 +94,12 @@
       font-size: 12px;
       padding: 2px 7px;
     }
+    .method.g {
+      background: #0f766e;
+      color: #fff;
+      min-width: 48px;
+      font-size: 11px;
+    }
     .chips {
       margin: 8px 0;
       display: flex;
@@ -653,6 +659,56 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
     </div>
 
     <div class="card">
+      <h2 data-i18n="grpcTitle">gRPC APIs (port 9090, HTTP/2)</h2>
+      <p class="muted" data-i18n="grpcDesc">The API server also exposes a gRPC server on port 9090. All gRPC services share the same business logic as the REST endpoints. Use grpcurl or any gRPC client to call them.</p>
+
+      <div class="endpoint">
+        <div class="path"><span class="method g">gRPC</span> japanapi.v1.CoverageService / GetCoverage</div>
+        <p data-i18n="coverageDesc">Returns available data coverage (same as GET /v1/coverage).</p>
+      </div>
+
+      <div class="endpoint">
+        <div class="path"><span class="method g">gRPC</span> japanapi.v1.DimensionService / ListMarkets</div>
+        <p data-i18n="marketsDesc">Same as GET /v1/markets.</p>
+        <pre>grpcurl -plaintext -d '{"filter":{"limit":3,"sort":"name","order":"asc"}}' localhost:9090 japanapi.v1.DimensionService/ListMarkets</pre>
+      </div>
+
+      <div class="endpoint">
+        <div class="path"><span class="method g">gRPC</span> japanapi.v1.DimensionService / ListItems</div>
+        <p data-i18n="itemsDesc">Same as GET /v1/items.</p>
+      </div>
+
+      <div class="endpoint">
+        <div class="path"><span class="method g">gRPC</span> japanapi.v1.DimensionService / ListOrigins</div>
+        <p data-i18n="originsDesc">Same as GET /v1/origins.</p>
+      </div>
+
+      <div class="endpoint">
+        <div class="path"><span class="method g">gRPC</span> japanapi.v1.PriceService / GetDailyPrices</div>
+        <p data-i18n="dailyDesc">Same as GET /v1/prices/daily.</p>
+        <pre>grpcurl -plaintext -d '{"filter":{"itemCode":"30100","dateRange":{"from":"2026-04-01","to":"2026-04-10"},"limit":3}}' localhost:9090 japanapi.v1.PriceService/GetDailyPrices</pre>
+      </div>
+
+      <div class="endpoint">
+        <div class="path"><span class="method g">gRPC</span> japanapi.v1.PriceService / GetLatestPrices</div>
+        <p data-i18n="latestDesc">Same as GET /v1/prices/latest.</p>
+      </div>
+
+      <div class="endpoint">
+        <div class="path"><span class="method g">gRPC</span> japanapi.v1.PriceService / GetPriceTrend</div>
+        <p data-i18n="trendDesc">Same as GET /v1/prices/trend.</p>
+      </div>
+
+      <div class="endpoint">
+        <div class="path"><span class="method g">gRPC</span> japanapi.v1.PriceService / GetPriceSummary</div>
+        <p data-i18n="summaryDesc">Same as GET /v1/prices/summary.</p>
+      </div>
+
+      <p class="muted" data-i18n="grpcReflection">gRPC reflection is enabled. Use <code>grpcurl -plaintext localhost:9090 list</code> to discover all services.</p>
+      <p class="muted" data-i18n="grpcMetrics">gRPC metrics are available at <code>/metrics</code> (prefix: <code>grpc_</code>).</p>
+    </div>
+
+    <div class="card">
       <h2 data-i18n="errorTitle">Error Response Format</h2>
       <p class="muted" data-i18n="requiredParamNote">Missing required query parameters return INVALID_ARGUMENT with the parameter names listed in the message.</p>
       <pre>{
@@ -729,7 +785,11 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
         requiredParamNote: "Missing required query parameters return INVALID_ARGUMENT with the parameter names listed in the message.",
         parameters: "Parameters",
         requestExample: "Request Example",
-        responseExample: "Response Example"
+        responseExample: "Response Example",
+        grpcTitle: "gRPC APIs (port 9090, HTTP/2)",
+        grpcDesc: "The API server also exposes a gRPC server on port 9090. All gRPC services share the same business logic as the REST endpoints.",
+        grpcReflection: "gRPC reflection is enabled. Use grpcurl -plaintext localhost:9090 list to discover all services.",
+        grpcMetrics: "gRPC metrics are available at /metrics (prefix: grpc_)."
       },
       ja: {
         title: "Japan Data API リファレンス",
@@ -785,7 +845,11 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
         requiredParamNote: "必須パラメータ不足時は INVALID_ARGUMENT を返し、メッセージに不足パラメータ名が含まれます。",
         parameters: "パラメータ",
         requestExample: "リクエスト例",
-        responseExample: "レスポンス例"
+        responseExample: "レスポンス例",
+        grpcTitle: "gRPC API（ポート 9090、HTTP/2）",
+        grpcDesc: "API サーバーはポート 9090 で gRPC サーバーも公開しています。すべての gRPC サービスは REST エンドポイントと同じビジネスロジックを共有します。",
+        grpcReflection: "gRPC reflection が有効です。grpcurl -plaintext localhost:9090 list ですべてのサービスを確認できます。",
+        grpcMetrics: "gRPC メトリクスは /metrics で確認できます（接頭辞: grpc_）。"
       },
       ko: {
         title: "Japan Data API 레퍼런스",
@@ -841,7 +905,11 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
         requiredParamNote: "필수 파라미터가 누락되면 INVALID_ARGUMENT를 반환하며, 메시지에 누락된 파라미터 이름이 포함됩니다.",
         parameters: "파라미터",
         requestExample: "요청 예시",
-        responseExample: "응답 예시"
+        responseExample: "응답 예시",
+        grpcTitle: "gRPC API (포트 9090, HTTP/2)",
+        grpcDesc: "API 서버는 포트 9090에서 gRPC 서버도 함께 실행합니다. 모든 gRPC 서비스는 REST 엔드포인트와 동일한 비즈니스 로직을 공유합니다.",
+        grpcReflection: "gRPC reflection이 활성화되어 있습니다. grpcurl -plaintext localhost:9090 list 로 모든 서비스를 확인할 수 있습니다.",
+        grpcMetrics: "gRPC 메트릭은 /metrics 에서 확인할 수 있습니다 (접두사: grpc_)."
       }
     };
 

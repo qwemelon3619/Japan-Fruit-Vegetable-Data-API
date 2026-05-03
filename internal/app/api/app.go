@@ -1,12 +1,17 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
+	"japan_data_project/internal/app/api/grpc"
 	"japan_data_project/internal/app/api/handler"
 	"japan_data_project/internal/platform/config"
 	"japan_data_project/internal/platform/db"
@@ -36,21 +41,53 @@ func Run() error {
 		return xerror.Wrap(xerror.CodeDB, "auto migrate failed", err)
 	}
 
+	// Shared handler for both HTTP and gRPC
 	h := handler.New(gormDB, logger)
+
+	// ----- HTTP Server -----
 	mux := http.NewServeMux()
 	h.Register(mux)
 
-	addr := fmt.Sprintf(":%d", cfg.App.HTTPPort)
+	httpAddr := fmt.Sprintf(":%d", cfg.App.HTTPPort)
 	httpServer := &http.Server{
-		Addr:              addr,
+		Addr:              httpAddr,
 		Handler:           h.WrapWithObservability(mux),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	logger.Info("api started", "http_port", cfg.App.HTTPPort, "db", cfg.Database.DBName)
-	if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		return xerror.Wrap(xerror.CodeInternal, "api serve failed", err)
+	go func() {
+		logger.Info("http server started", "port", cfg.App.HTTPPort)
+		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Error("http serve failed", "error", err)
+		}
+	}()
+
+	// ----- gRPC Server -----
+	grpcServer := grpc.New(h.APIV1(), h.Monitoring(), cfg.App.GRPCPort, logger)
+	go func() {
+		logger.Info("gRPC server starting", "port", cfg.App.GRPCPort)
+		if err := grpcServer.Start(); err != nil {
+			logger.Error("gRPC serve failed", "error", err)
+		}
+	}()
+
+	// ----- Wait for shutdown signal -----
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	sig := <-quit
+	logger.Info("shutting down", "signal", sig.String())
+
+	// Graceful shutdown: HTTP first, then gRPC
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		logger.Error("http shutdown error", "error", err)
 	}
+
+	grpcServer.GracefulStop()
+
+	logger.Info("shutdown complete")
 	return nil
 }
 

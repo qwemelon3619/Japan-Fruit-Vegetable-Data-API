@@ -13,9 +13,9 @@
 ## 主なコンポーネント
 - **Downloader**: 日付/期間の CSV 収集、Shift-JIS -> UTF-8 変換
 - **Ingestor**: PostgreSQL 取り込みパイプライン
-- **API Server**: 価格推移、比較、ランキング、カバレッジのクエリエンドポイント
+- **API Server**: 価格推移、比較、ランキング、カバレッジのクエリエンドポイント（REST + gRPC）
 - **Ops Pipeline**: Docker Compose + cron によるスケジュール自動化
-- **Monitoring**: `/metrics` + CSV スナップショット + ダッシュボード
+- **Monitoring**: `/metrics` + CSV スナップショット + ダッシュボード（gRPC メトリクスを含む）
 
 ## データソースと帰属
 - ソースサイト: MAFF 卸売市場データポータル（日本）
@@ -31,11 +31,12 @@
 - PostgreSQL
 - Docker
 - Nginx
+- gRPC (REST と共存)
 
 ## アーキテクチャ（高レベル）
 1. `downloader` が生の CSV ファイルを取得し、UTF-8 に変換します
 2. `ingestor` が正規化されたデータを PostgreSQL に読み込みます（ディメンション / ファクトモデル）
-3. `api` がクエリおよび監視エンドポイントを公開します
+3. `api` が REST（HTTP :8080）**および gRPC（:9090）** の両方でクエリ・監視エンドポイントを公開します
 4. `pipeline-cron` がスケジュールされた取り込みと監視スナップショットを実行します
 
 ## クイックスタート
@@ -118,6 +119,15 @@ https://jp-vgfr-api.seungpyo.xyz/doc-llm
 - 比較 / ランキング
   - `GET /v1/compare/markets`
   - `GET /v1/rankings/items`
+- gRPC（ポート 9090、HTTP/2）
+  - `japanapi.v1.CoverageService/GetCoverage`
+  - `japanapi.v1.DimensionService/ListMarkets`
+  - `japanapi.v1.DimensionService/ListItems`
+  - `japanapi.v1.DimensionService/ListOrigins`
+  - `japanapi.v1.PriceService/GetDailyPrices`
+  - `japanapi.v1.PriceService/GetLatestPrices`
+  - `japanapi.v1.PriceService/GetPriceTrend`
+  - `japanapi.v1.PriceService/GetPriceSummary`
 
 ## エンドポイント動作概要
 
@@ -202,6 +212,38 @@ https://jp-vgfr-api.seungpyo.xyz/doc-llm
   - `run_id` が指定された場合は正の整数である必要があります
   - `id DESC` 順の取り込みファイルを返します
 
+### gRPC API（ポート 9090、HTTP/2）
+
+API サーバーは REST HTTP サーバーと並行して gRPC サーバーを実行します。両者は同じビジネスロジックとデータベースを共有します。`grpcurl` または任意の gRPC クライアントを使用して呼び出せます。
+
+**利用可能なサービス:**
+
+| サービス | RPC | 説明 |
+|---------|-----|------|
+| `japanapi.v1.CoverageService` | `GetCoverage` | `GET /v1/coverage` と同じ |
+| `japanapi.v1.DimensionService` | `ListMarkets` | `GET /v1/markets` と同じ |
+| | `ListItems` | `GET /v1/items` と同じ |
+| | `ListOrigins` | `GET /v1/origins` と同じ |
+| `japanapi.v1.PriceService` | `GetDailyPrices` | `GET /v1/prices/daily` と同じ |
+| | `GetLatestPrices` | `GET /v1/prices/latest` と同じ |
+| | `GetPriceTrend` | `GET /v1/prices/trend` と同じ |
+| | `GetPriceSummary` | `GET /v1/prices/summary` と同じ |
+
+**gRPC リクエスト/レスポンスのフィールドは、上記 REST JSON のフィールドと対応しています。**
+
+**gRPC reflection** が有効なため、`grpcurl` でサービス一覧を取得できます:
+```bash
+grpcurl -plaintext localhost:9090 list
+grpcurl -plaintext localhost:9090 japanapi.v1.CoverageService/GetCoverage
+grpcurl -plaintext -d '{"filter":{"itemCode":"30100","dateRange":{"from":"2026-04-01","to":"2026-04-10"},"limit":3}}' localhost:9090 japanapi.v1.PriceService/GetDailyPrices
+```
+
+gRPC 呼び出しは同じ Prometheus `/metrics` に記録されます:
+```
+grpc_requests_total{method="/japanapi.v1.PriceService/GetDailyPrices",status="ok"} 1
+grpc_request_duration_seconds_sum{method="/japanapi.v1.CoverageService/GetCoverage"} 0.196
+```
+
 ## デプロイノート
 - `japan-data-api` は API プロセスを継続稼働させるために `command: "api"` で実行する必要があります
 - `japan-data-pipeline-cron` は cron をフォアグラウンドで維持するために `command: "start-cron.sh"` で実行する必要があります
@@ -244,7 +286,8 @@ https://jp-vgfr-api.seungpyo.xyz/doc-llm
 - `POSTGRES_SSLMODE`, `POSTGRES_TIMEZONE`: PostgreSQL 接続の挙動
 - `POSTGRES_MAX_OPEN_CONNS`, `POSTGRES_MAX_IDLE_CONNS`: DB プールサイズの制御
 - `POSTGRES_CONN_MAX_LIFETIME`, `POSTGRES_CONN_MAX_IDLE_TIME`: DB 接続の再利用制御
-- `HTTP_PORT`: コンテナ / プロセス内の API リッスンポート
+- `HTTP_PORT`: REST API リッスンポート（デフォルト `8080`）
+- `GRPC_PORT`: gRPC サーバーリッスンポート（デフォルト `9090`）
 - `DAILY_INGEST_SCHEDULE`: 日次ダウンロード + 取り込みの cron スケジュール
 - `MONITOR_SNAPSHOT_SCHEDULE`: 監視 CSV スナップショットの cron スケジュール
 - `API_BASE_URL`: `/ready`, `/metrics`, および取り込みステータスチェックのための監視スクリプト対象
@@ -261,6 +304,8 @@ https://jp-vgfr-api.seungpyo.xyz/doc-llm
 - ソースデータに産地名 / 産地コードがない場合、ingestor はそれを `origin_code='UNKNOWN'` および `origin_name='不明'` に正規化します
 
 ## クエリ例
+
+### REST（HTTP）
 ```bash
 curl -s "https://jp-vgfr-api.seungpyo.xyz/v1/coverage"
 curl -s "https://jp-vgfr-api.seungpyo.xyz/v1/prices/latest?item_code=30100&limit=10"
@@ -269,10 +314,25 @@ curl -s "https://jp-vgfr-api.seungpyo.xyz/v1/prices/trend?item_code=30100&from=2
 curl -s "https://jp-vgfr-api.seungpyo.xyz/v1/rankings/items?date=2026-04-16&metric=arrival&limit=20"
 ```
 
+### gRPC（ポート 9090、grpcurl が必要）
+```bash
+grpcurl -plaintext localhost:9090 japanapi.v1.CoverageService/GetCoverage
+grpcurl -plaintext -d '{"filter":{"limit":3,"sort":"name","order":"asc"}}' localhost:9090 japanapi.v1.DimensionService/ListMarkets
+grpcurl -plaintext -d '{"filter":{"itemCode":"30100","dateRange":{"from":"2026-04-01","to":"2026-04-30"},"limit":3}}' localhost:9090 japanapi.v1.PriceService/GetDailyPrices
+grpcurl -plaintext -d '{"itemCode":"30100","limit":3}' localhost:9090 japanapi.v1.PriceService/GetLatestPrices
+grpcurl -plaintext -d '{"itemCode":"30100","dateRange":{"from":"2026-04-01","to":"2026-04-30"}}' localhost:9090 japanapi.v1.PriceService/GetPriceTrend
+grpcurl -plaintext -d '{"itemCode":"30100","groupBy":"month","dateRange":{"from":"2026-01-01","to":"2026-04-30"}}' localhost:9090 japanapi.v1.PriceService/GetPriceSummary
+```
+
 ## テスト
 すべてのテストを実行:
 ```bash
 go test ./...
+```
+
+gRPC テストのみ実行:
+```bash
+go test ./tests/unit/ -run TestGRPC -v
 ```
 
 downloader の例（1 つの UTF-8 CSV にマージしてソースファイルを削除）:
@@ -300,10 +360,15 @@ k6 run tests/stress/p95_one_second_breakpoint.js
 
 ## プロジェクト構成
 - `cmd/`: 実行可能エントリポイント
-- `internal/`: ドメイン、ハンドラ、プラットフォームロジック
+- `api/proto/`: protobuf サービス定義（.proto）
+- `proto/`: 生成された Go protobuf/gRPC コード
+- `internal/`: ドメイン、ハンドラ、プラットフォーム、gRPC サーバーロジック
+- `internal/app/api/grpc/`: gRPC サーバー、インターセプター、サービス実装
+- `internal/app/api/handler/v1/queries.go`: 共有クエリレイヤー（HTTP + gRPC）
+- `scripts/gen_proto.sh`: protobuf コード生成スクリプト
 - `scripts/`: 運用スクリプト
 - `docker/`: nginx と cron の設定
-- `tests/unit/`: Go テストスイート
+- `tests/unit/`: Go テストスイート（gRPC テストを含む）
 - `tests/stress/`: `k6` ストレステストスクリプトと結果アーティファクト
 
 ## ストレステスト
@@ -376,17 +441,20 @@ k6 run tests/stress/p95_one_second_breakpoint.js
                      +------------------+------------------+
                      |                                     |
                      v                                     v
-          +-------------------------+          +--------------------------+
-          | API server              |          | monitoring snapshot job  |
-          | - /v1/*                 |          | - /ready, /metrics check |
-          | - /ready, /metrics      |          | - CSV snapshot output    |
-          | - /doc, /doc-llm        |          +-------------+------------+
-          +------------+------------+                        |
-                       |                                     v
-                       v                     data/monitoring/csv/snapshots.csv
-          +-----------------------------+
-          | Nginx / Cloudflare / users |
-          +-----------------------------+
+          +------------------------------------+ +--------------------------+
+          | API server                         | | monitoring snapshot job  |
+          | - REST (HTTP :8080) /v1/*          | | - /ready, /metrics check |
+          | - gRPC (:9090) Coverage/Dim/Prices | | - CSV snapshot output    |
+          | - /ready, /metrics, /doc           | +-------------+------------+
+          +------------+----------+------------+               |
+                       |          |                            v
+                       |          |            data/monitoring/csv/snapshots.csv
+                       v          v
+          +------------------------------+
+          | Nginx / Cloudflare / users   |
+          | HTTP :80  → REST :8080       |
+          | gRPC :9090 → gRPC :9090      |
+          +------------------------------+
 ```
 
 ## この設計の理由
@@ -410,6 +478,12 @@ k6 run tests/stress/p95_one_second_breakpoint.js
 - `latest` は現在状態のダッシュボードをサポートします。
 - `trend` と `summary` は時系列分析とロールアップ分析をサポートします。
 - `compare` と `rankings` は、クライアントに複雑な SQL を組み立てさせることなく、プロダクト向けの探索ビューをサポートします。
+
+### REST に加えて gRPC を追加する理由
+- gRPC は型付きコントラクト、ストリーミングの可能性、効率的なバイナリ転送をプログラムクライアントに提供します。
+- Proto 定義はサービスインターフェースの単一情報源として機能します。
+- REST API は変更されず、アドホックなクエリやデバッグのための主要インターフェースであり続けます。
+- 両者は共通のクエリレイヤー（`handler/v1/queries.go`）を介して同じビジネスロジックを共有します。
 
 ## DB スキーマとインデックス設計
 
@@ -504,6 +578,7 @@ k6 run tests/stress/p95_one_second_breakpoint.js
 - 5xx エラー数
 - DB エラー総数
 - p95 スタイルの監視ビューを含むリクエストレイテンシ
+- メソッド別 gRPC リクエスト総数とレイテンシ
 - 最新の取り込みステータス
 - レディネスの成功 / 失敗
 
@@ -613,7 +688,7 @@ curl -s "http://localhost:8080/v1/rankings/items?date=2026-04-16&metric=arrival&
 ### この設計が最適化していること
 - 運用の単純さ
 - 再現可能な取り込み成果物
-- 摩擦の少ない分析 API
+- 摩擦の少ない分析 API（REST + gRPC）
 - わかりやすい SQL とデバッグ
 
 ### 受け入れているトレードオフ
@@ -627,6 +702,8 @@ curl -s "http://localhost:8080/v1/rankings/items?date=2026-04-16&metric=arrival&
   - より安全で低コストなデフォルトクエリになりますが、完全な履歴分析には明示的な範囲指定が必要だとユーザーが理解している必要があります。
 - 幅広い非正規化 fact テーブルではなく、ディメンション / fact 正規化を採用しています。
   - 一貫性とストレージ効率は向上しますが、読み取り時に join が必要です。
+- gRPC を REST と並行して提供。
+  - プログラムクライアント向けの Proto コントラクトと効率的な転送を提供しますが、2 つのプロトコル面が増えます。
 
 ## 制限事項
 - downloader は上流の MAFF HTML 構造と CSV 公開フローに依存しており、上流の変更によってパーサ更新が必要になる場合があります

@@ -9,7 +9,8 @@ type apiError struct {
 
 type apiMeta map[string]any
 
-type dimensionRow struct {
+// DimensionRow is a dimension lookup result row.
+type DimensionRow struct {
 	ID   uint   `json:"id"`
 	Code string `json:"code"`
 	Name string `json:"name"`
@@ -25,7 +26,8 @@ type coverageRow struct {
 	LastIngestionAt      *time.Time `json:"last_ingestion_finished_at"`
 }
 
-type dailyRow struct {
+// DailyRow is a daily price fact row.
+type DailyRow struct {
 	TradeDate   string   `json:"trade_date"`
 	WeekdayJA   string   `json:"weekday_ja"`
 	MarketCode  string   `json:"market_code"`
@@ -48,13 +50,14 @@ type dailyRow struct {
 	SourceRowNo int      `json:"source_row_no"`
 }
 
-type dailyRowWithTotal struct {
-	DailyRow        dailyRow `gorm:"embedded"`
+type DailyRowWithTotal struct {
+	DailyRow        `gorm:"embedded"`
 	TotalCount      int64    `gorm:"column:total_count"`
 	LatestTradeDate *string  `gorm:"column:latest_trade_date"`
 }
 
-type trendRow struct {
+// TrendRow is a price trend aggregation row.
+type TrendRow struct {
 	TradeDate   string   `json:"trade_date" gorm:"column:trade_date"`
 	RowsCount   int64    `json:"rows_count" gorm:"column:rows_count"`
 	AvgPriceMid *float64 `json:"avg_price_mid_yen" gorm:"column:avg_price_mid_yen"`
@@ -63,7 +66,8 @@ type trendRow struct {
 	ArrivalTon  *float64 `json:"arrival_ton_sum" gorm:"column:arrival_ton_sum"`
 }
 
-type summaryRow struct {
+// SummaryRow is a price summary aggregation row.
+type SummaryRow struct {
 	Period      string   `json:"period"`
 	RowsCount   int64    `json:"rows_count"`
 	AvgPriceMid *float64 `json:"avg_price_mid_yen"`

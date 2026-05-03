@@ -13,9 +13,9 @@ This project collects Japanese fruit/vegetable wholesale data, normalizes it, st
 ## Main Components
 - **Downloader**: date/range CSV collection, Shift-JIS -> UTF-8 conversion
 - **Ingestor**: PostgreSQL ingestion pipeline
-- **API Server**: query endpoints for price trends, comparison, ranking, and coverage
+- **API Server**: query endpoints for price trends, comparison, ranking, and coverage (REST + gRPC)
 - **Ops Pipeline**: scheduled automation with Docker Compose + cron
-- **Monitoring**: `/metrics` + CSV snapshots + dashboard
+- **Monitoring**: `/metrics` + CSV snapshots + dashboard (includes gRPC metrics)
 
 ## Data Source & Attribution
 - Source website: MAFF wholesale market data portal (Japan)
@@ -31,11 +31,12 @@ This project collects Japanese fruit/vegetable wholesale data, normalizes it, st
 - PostgreSQL
 - Docker
 - Nginx
+- gRPC (side-by-side with REST)
 
 ## Architecture (High Level)
 1. `downloader` fetches raw CSV files and converts them to UTF-8
 2. `ingestor` loads normalized data into PostgreSQL (dimension/fact model)
-3. `api` exposes query and monitoring endpoints
+3. `api` exposes query and monitoring endpoints via both **REST (HTTP :8080)** and **gRPC (:9090)**
 4. `pipeline-cron` runs scheduled ingestion and monitoring snapshots
 
 ## Quick Start
@@ -118,6 +119,15 @@ Production deployments for this project additionally enforce access control and 
 - Compare/Ranking
   - `GET /v1/compare/markets`
   - `GET /v1/rankings/items`
+- gRPC (port 9090, HTTP/2)
+  - `japanapi.v1.CoverageService/GetCoverage`
+  - `japanapi.v1.DimensionService/ListMarkets`
+  - `japanapi.v1.DimensionService/ListItems`
+  - `japanapi.v1.DimensionService/ListOrigins`
+  - `japanapi.v1.PriceService/GetDailyPrices`
+  - `japanapi.v1.PriceService/GetLatestPrices`
+  - `japanapi.v1.PriceService/GetPriceTrend`
+  - `japanapi.v1.PriceService/GetPriceSummary`
 
 ## Endpoint Behavior Summary
 
@@ -202,6 +212,38 @@ Production deployments for this project additionally enforce access control and 
   - `run_id` must be a positive integer when provided
   - Returns ingestion files ordered by `id DESC`
 
+### gRPC APIs (port 9090, HTTP/2)
+
+The API server runs a gRPC server side-by-side with the REST HTTP server. Both share the same business logic and database. Use `grpcurl` or any gRPC client to call these services.
+
+**Available services:**
+
+| Service | RPC | Description |
+|---------|-----|-------------|
+| `japanapi.v1.CoverageService` | `GetCoverage` | Same as `GET /v1/coverage` |
+| `japanapi.v1.DimensionService` | `ListMarkets` | Same as `GET /v1/markets` |
+| | `ListItems` | Same as `GET /v1/items` |
+| | `ListOrigins` | Same as `GET /v1/origins` |
+| `japanapi.v1.PriceService` | `GetDailyPrices` | Same as `GET /v1/prices/daily` |
+| | `GetLatestPrices` | Same as `GET /v1/prices/latest` |
+| | `GetPriceTrend` | Same as `GET /v1/prices/trend` |
+| | `GetPriceSummary` | Same as `GET /v1/prices/summary` |
+
+**gRPC request/response fields correspond to the REST JSON fields documented above.**
+
+**gRPC reflection** is enabled for `grpcurl` discovery:
+```bash
+grpcurl -plaintext localhost:9090 list
+grpcurl -plaintext localhost:9090 japanapi.v1.CoverageService/GetCoverage
+grpcurl -plaintext -d '{"filter":{"itemCode":"30100","dateRange":{"from":"2026-04-01","to":"2026-04-10"},"limit":3}}' localhost:9090 japanapi.v1.PriceService/GetDailyPrices
+```
+
+gRPC calls are recorded in the same Prometheus `/metrics` output:
+```
+grpc_requests_total{method="/japanapi.v1.PriceService/GetDailyPrices",status="ok"} 1
+grpc_request_duration_seconds_sum{method="/japanapi.v1.CoverageService/GetCoverage"} 0.196
+```
+
 ## Deployment Notes
 - `japan-data-api` must run with `command: "api"` so the API process stays up
 - `japan-data-pipeline-cron` must run with `command: "start-cron.sh"` so cron stays up in foreground
@@ -244,7 +286,8 @@ Production deployments for this project additionally enforce access control and 
 - `POSTGRES_SSLMODE`, `POSTGRES_TIMEZONE`: PostgreSQL connection behavior
 - `POSTGRES_MAX_OPEN_CONNS`, `POSTGRES_MAX_IDLE_CONNS`: DB pool size controls
 - `POSTGRES_CONN_MAX_LIFETIME`, `POSTGRES_CONN_MAX_IDLE_TIME`: DB connection recycling controls
-- `HTTP_PORT`: API listen port inside the container/process
+- `HTTP_PORT`: REST API listen port inside the container/process (default `8080`)
+- `GRPC_PORT`: gRPC server listen port (default `9090`)
 - `DAILY_INGEST_SCHEDULE`: cron schedule for daily download + ingest
 - `MONITOR_SNAPSHOT_SCHEDULE`: cron schedule for monitoring CSV snapshots
 - `API_BASE_URL`: monitoring script target for `/ready`, `/metrics`, and ingestion status checks
@@ -261,6 +304,8 @@ Production deployments for this project additionally enforce access control and 
 - When source data has no origin name/code, the ingestor normalizes it to `origin_code='UNKNOWN'` and `origin_name='不明'`
 
 ## Example Queries
+
+### REST (HTTP)
 ```bash
 curl -s "https://jp-vgfr-api.seungpyo.xyz/v1/coverage"
 curl -s "https://jp-vgfr-api.seungpyo.xyz/v1/prices/latest?item_code=30100&limit=10"
@@ -269,10 +314,25 @@ curl -s "https://jp-vgfr-api.seungpyo.xyz/v1/prices/trend?item_code=30100&from=2
 curl -s "https://jp-vgfr-api.seungpyo.xyz/v1/rankings/items?date=2026-04-16&metric=arrival&limit=20"
 ```
 
+### gRPC (port 9090, requires grpcurl)
+```bash
+grpcurl -plaintext localhost:9090 japanapi.v1.CoverageService/GetCoverage
+grpcurl -plaintext -d '{"filter":{"limit":3,"sort":"name","order":"asc"}}' localhost:9090 japanapi.v1.DimensionService/ListMarkets
+grpcurl -plaintext -d '{"filter":{"itemCode":"30100","dateRange":{"from":"2026-04-01","to":"2026-04-30"},"limit":3}}' localhost:9090 japanapi.v1.PriceService/GetDailyPrices
+grpcurl -plaintext -d '{"itemCode":"30100","limit":3}' localhost:9090 japanapi.v1.PriceService/GetLatestPrices
+grpcurl -plaintext -d '{"itemCode":"30100","dateRange":{"from":"2026-04-01","to":"2026-04-30"}}' localhost:9090 japanapi.v1.PriceService/GetPriceTrend
+grpcurl -plaintext -d '{"itemCode":"30100","groupBy":"month","dateRange":{"from":"2026-01-01","to":"2026-04-30"}}' localhost:9090 japanapi.v1.PriceService/GetPriceSummary
+```
+
 ## Testing
 Run all tests:
 ```bash
 go test ./...
+```
+
+Run gRPC-specific tests:
+```bash
+go test ./tests/unit/ -run TestGRPC -v
 ```
 
 Downloader example (merge into one UTF-8 CSV and delete source files):
@@ -300,10 +360,15 @@ k6 run tests/stress/p95_one_second_breakpoint.js
 
 ## Project Structure
 - `cmd/`: executable entrypoints
-- `internal/`: domain, handler, and platform logic
+- `api/proto/`: protobuf service definitions (.proto)
+- `proto/`: generated Go protobuf/gRPC code
+- `internal/`: domain, handler, platform, and gRPC server logic
+- `internal/app/api/grpc/`: gRPC server, interceptors, and service implementations
+- `internal/app/api/handler/v1/queries.go`: shared query layer (HTTP + gRPC)
+- `scripts/gen_proto.sh`: protobuf code generation script
 - `scripts/`: operational scripts
 - `docker/`: nginx and cron settings
-- `tests/unit/`: Go test suites
+- `tests/unit/`: Go test suites (includes gRPC tests)
 - `tests/stress/`: `k6` stress test scripts and result artifacts
 
 ## Stress Testing
@@ -376,17 +441,20 @@ k6 run tests/stress/p95_one_second_breakpoint.js
                      +------------------+------------------+
                      |                                     |
                      v                                     v
-          +-------------------------+          +--------------------------+
-          | API server              |          | monitoring snapshot job  |
-          | - /v1/*                 |          | - /ready, /metrics check |
-          | - /ready, /metrics      |          | - CSV snapshot output    |
-          | - /doc, /doc-llm        |          +-------------+------------+
-          +------------+------------+                        |
-                       |                                     v
-                       v                     data/monitoring/csv/snapshots.csv
-          +-----------------------------+
-          | Nginx / Cloudflare / users |
-          +-----------------------------+
+          +------------------------------------+ +--------------------------+
+          | API server                         | | monitoring snapshot job  |
+          | - REST (HTTP :8080) /v1/*          | | - /ready, /metrics check |
+          | - gRPC (:9090) Coverage/Dim/Prices | | - CSV snapshot output    |
+          | - /ready, /metrics, /doc           | +-------------+------------+
+          +------------+----------+------------+               |
+                       |          |                            v
+                       |          |            data/monitoring/csv/snapshots.csv
+                       v          v
+          +------------------------------+
+          | Nginx / Cloudflare / users   |
+          | HTTP :80  → REST :8080       |
+          | gRPC :9090 → gRPC :9090      |
+          +------------------------------+
 ```
 
 ## Why This Design
@@ -410,6 +478,12 @@ k6 run tests/stress/p95_one_second_breakpoint.js
 - `latest` supports current-state dashboards.
 - `trend` and `summary` support time-series and rollup analytics.
 - `compare` and `rankings` support product-facing exploratory views without requiring clients to compose complex SQL.
+
+### Why add gRPC alongside REST
+- gRPC offers typed contracts, streaming potential, and efficient binary transport for programmatic clients.
+- Proto definitions serve as a single source of truth for service interfaces.
+- The REST API is unchanged and remains the primary interface for ad-hoc queries and debugging.
+- Both share the same underlying business logic via a common query layer (`handler/v1/queries.go`).
 
 ## DB Schema and Index Design
 
@@ -504,6 +578,7 @@ k6 run tests/stress/p95_one_second_breakpoint.js
 - 5xx error count
 - DB error totals
 - request latency, including p95-style monitoring views
+- gRPC request totals and latency by method
 - latest ingestion status
 - readiness success/failure
 
@@ -613,7 +688,7 @@ curl -s "http://localhost:8080/v1/rankings/items?date=2026-04-16&metric=arrival&
 ### What this design optimizes for
 - operational simplicity
 - reproducible ingest artifacts
-- low-friction analytics APIs
+- low-friction analytics APIs (REST + gRPC)
 - straightforward SQL and debugging
 
 ### Tradeoffs accepted
@@ -627,6 +702,8 @@ curl -s "http://localhost:8080/v1/rankings/items?date=2026-04-16&metric=arrival&
   - Safer and cheaper default queries, but users must know to pass explicit ranges for full-history analysis.
 - Dimension/fact normalization instead of a wide denormalized fact table.
   - Better consistency and storage profile, but requires joins on read.
+- gRPC side-by-side with REST.
+  - Proto contracts and efficient transport for programmatic clients, but adds a second protocol surface.
 
 ## Limitations
 - The downloader depends on the upstream MAFF HTML structure and CSV exposure flow; upstream changes may require parser updates

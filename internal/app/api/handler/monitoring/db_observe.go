@@ -12,3 +12,8 @@ func (s *Service) observeDB(queryName string, fn func() error) error {
 func (s *Service) ObserveDB(queryName string, fn func() error) error {
 	return s.observeDB(queryName, fn)
 }
+
+// ObserveGRPC records a gRPC call in the shared metrics store.
+func (s *Service) ObserveGRPC(method string, duration time.Duration, err error) {
+	s.metrics.observeGRPC(method, duration.Seconds(), err)
+}

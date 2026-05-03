@@ -35,6 +35,14 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	h.apiV1.Register(mux)
 }
 
+func (h *Handler) APIV1() *v1.Service {
+	return h.apiV1
+}
+
+func (h *Handler) Monitoring() *monitoring.Service {
+	return h.monitoring
+}
+
 func (h *Handler) WrapWithObservability(next http.Handler) http.Handler {
 	return h.monitoring.WrapWithObservability(h.logger, next)
 }

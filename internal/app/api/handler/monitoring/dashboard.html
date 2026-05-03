@@ -126,6 +126,8 @@
       <div class="card"><div class="label">HTTP 5xx Rate</div><div class="value" id="v5xx">-</div></div>
       <div class="card"><div class="label">HTTP p95 (ms)</div><div class="value" id="vP95">-</div></div>
       <div class="card"><div class="label">Ingestion Status</div><div class="value" id="vIngest">-</div></div>
+      <div class="card"><div class="label">gRPC Total</div><div class="value" id="vGRPC">-</div></div>
+      <div class="card"><div class="label">gRPC Error Rate</div><div class="value" id="vGRPCErr">-</div></div>
     </div>
 
     <table>
@@ -154,6 +156,8 @@
     const v5xx = document.getElementById("v5xx");
     const vP95 = document.getElementById("vP95");
     const vIngest = document.getElementById("vIngest");
+    const vGRPC = document.getElementById("vGRPC");
+    const vGRPCErr = document.getElementById("vGRPCErr");
     const refreshBtn = document.getElementById("refreshBtn");
 
     let timer = null;
@@ -252,6 +256,32 @@
       }
     }
 
+    async function loadGRPCMetrics() {
+      try {
+        const res = await fetch("/metrics", { cache: "no-store" });
+        if (!res.ok) return;
+        const text = await res.text();
+        const lines = text.split("\n");
+        let total = 0, errors = 0;
+        for (const line of lines) {
+          if (line.startsWith("grpc_requests_total{")) {
+            const parts = line.split(" ");
+            const val = parseInt(parts[parts.length - 1], 10);
+            if (!isNaN(val)) total += val;
+            if (line.includes('status="error"')) errors += val;
+          }
+        }
+        vGRPC.textContent = total.toLocaleString();
+        const rate = total > 0 ? ((errors / total) * 100).toFixed(2) : "0.00";
+        vGRPCErr.textContent = `${rate}%`;
+        const errRate = total > 0 ? errors / total : 0;
+        clsByStatus(vGRPCErr, errRate <= 0.05 ? "ok" : errRate <= 0.20 ? "warn" : "failed");
+      } catch (e) {
+        vGRPC.textContent = "-";
+        vGRPCErr.textContent = "-";
+      }
+    }
+
     async function loadNow() {
       setErr("");
       try {
@@ -262,6 +292,7 @@
       } catch (e) {
         setErr(`Failed to load CSV: ${e.message}`);
       }
+      loadGRPCMetrics();
     }
 
     document.getElementById("loadBtn").addEventListener("click", loadNow);

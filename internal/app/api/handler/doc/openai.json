@@ -2,6 +2,7 @@
   "name": "Japan Fruit & Vegetable Data API",
   "description": "Structured machine-readable API reference for Japanese wholesale fruit and vegetable market data.",
   "base_url": "https://jp-vgfr-api.seungpyo.xyz",
+  "grpc_port": 9090,
   "documentation_url": "https://jp-vgfr-api.seungpyo.xyz/doc",
   "llm_documentation_url": "https://jp-vgfr-api.seungpyo.xyz/doc-llm",
   "auth": {
@@ -506,6 +507,105 @@
         "run_id": "int, optional, positive integer",
         "limit": "int, optional, 1..1000",
         "offset": "int, optional, >= 0"
+      }
+    }
+  ],
+  "grpc_endpoints": [
+    {
+      "service": "japanapi.v1.CoverageService",
+      "rpc": "GetCoverage",
+      "summary": "Returns available fact table coverage (same as GET /v1/coverage)."
+    },
+    {
+      "service": "japanapi.v1.DimensionService",
+      "rpc": "ListMarkets",
+      "summary": "Lists market dimension rows (same as GET /v1/markets).",
+      "request_fields": {
+        "filter.limit": "int, optional, 1..500",
+        "filter.offset": "int, optional, >= 0",
+        "filter.q": "string, optional, code/name search",
+        "filter.sort": "string, optional: id|code|name",
+        "filter.order": "string, optional: asc|desc"
+      }
+    },
+    {
+      "service": "japanapi.v1.DimensionService",
+      "rpc": "ListItems",
+      "summary": "Lists item dimension rows (same as GET /v1/items).",
+      "request_fields": {
+        "filter.limit": "int, optional, 1..500",
+        "filter.offset": "int, optional, >= 0",
+        "filter.q": "string, optional, code/name search",
+        "filter.sort": "string, optional: id|code|name",
+        "filter.order": "string, optional: asc|desc"
+      }
+    },
+    {
+      "service": "japanapi.v1.DimensionService",
+      "rpc": "ListOrigins",
+      "summary": "Lists origin dimension rows (same as GET /v1/origins).",
+      "request_fields": {
+        "filter.limit": "int, optional, 1..500",
+        "filter.offset": "int, optional, >= 0",
+        "filter.q": "string, optional, code/name search",
+        "filter.sort": "string, optional: id|code|name",
+        "filter.order": "string, optional: asc|desc"
+      }
+    },
+    {
+      "service": "japanapi.v1.PriceService",
+      "rpc": "GetDailyPrices",
+      "summary": "Returns raw daily price fact rows (same as GET /v1/prices/daily).",
+      "request_fields": {
+        "filter.item_code": "string, required",
+        "filter.market_code": "string, optional",
+        "filter.origin_code": "string, optional",
+        "filter.date_range.date": "string, optional, YYYY-MM-DD",
+        "filter.date_range.from": "string, optional, YYYY-MM-DD",
+        "filter.date_range.to": "string, optional, YYYY-MM-DD",
+        "filter.limit": "int, optional, 1..2000",
+        "filter.offset": "int, optional, >= 0",
+        "filter.sort": "string, optional: trade_date|market_code|item_code|origin_code|price_mid|arrival",
+        "filter.order": "string, optional: asc|desc"
+      }
+    },
+    {
+      "service": "japanapi.v1.PriceService",
+      "rpc": "GetLatestPrices",
+      "summary": "Returns rows for the latest available trade date (same as GET /v1/prices/latest).",
+      "request_fields": {
+        "item_code": "string, required",
+        "market_code": "string, optional",
+        "origin_code": "string, optional",
+        "limit": "int, optional, 1..2000",
+        "offset": "int, optional, >= 0",
+        "sort": "string, optional: trade_date|market_code|item_code|origin_code|price_mid|arrival",
+        "order": "string, optional: asc|desc"
+      }
+    },
+    {
+      "service": "japanapi.v1.PriceService",
+      "rpc": "GetPriceTrend",
+      "summary": "Aggregates trend by trade date (same as GET /v1/prices/trend).",
+      "request_fields": {
+        "item_code": "string, required",
+        "market_code": "string, optional",
+        "origin_code": "string, optional",
+        "date_range.from": "string, optional, YYYY-MM-DD",
+        "date_range.to": "string, optional, YYYY-MM-DD"
+      }
+    },
+    {
+      "service": "japanapi.v1.PriceService",
+      "rpc": "GetPriceSummary",
+      "summary": "Aggregates summary by day, week, or month (same as GET /v1/prices/summary).",
+      "request_fields": {
+        "item_code": "string, required",
+        "market_code": "string, optional",
+        "origin_code": "string, optional",
+        "group_by": "string, optional: day|week|month",
+        "date_range.from": "string, optional, YYYY-MM-DD",
+        "date_range.to": "string, optional, YYYY-MM-DD"
       }
     }
   ],

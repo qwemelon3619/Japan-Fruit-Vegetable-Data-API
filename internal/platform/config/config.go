@@ -21,6 +21,7 @@ type AppConfig struct {
 	LogLevel  string
 	LogFormat string
 	HTTPPort  int
+	GRPCPort  int
 }
 
 type DatabaseConfig struct {
@@ -51,6 +52,7 @@ func Load() Config {
 			LogLevel:  envOrDefault("LOG_LEVEL", "info"),
 			LogFormat: envOrDefault("LOG_FORMAT", "text"),
 			HTTPPort:  envIntOrDefault("HTTP_PORT", 8080),
+			GRPCPort:  envIntOrDefault("GRPC_PORT", 9090),
 		},
 		Database: DatabaseConfig{
 			Host:            envOrDefault("POSTGRES_HOST", "localhost"),
