@@ -99,6 +99,8 @@ func normalizeMetricPath(path string) string {
 		return "/v1/origins"
 	case strings.HasPrefix(path, "/v1/prices/daily"):
 		return "/v1/prices/daily"
+	case strings.HasPrefix(path, "/v1/prices/latest"):
+		return "/v1/prices/latest"
 	case strings.HasPrefix(path, "/v1/prices/trend"):
 		return "/v1/prices/trend"
 	case strings.HasPrefix(path, "/v1/prices/summary"):
@@ -107,6 +109,8 @@ func normalizeMetricPath(path string) string {
 		return "/v1/compare/markets"
 	case strings.HasPrefix(path, "/v1/rankings/items"):
 		return "/v1/rankings/items"
+	case strings.HasPrefix(path, "/v1/coverage"):
+		return "/v1/coverage"
 	case strings.HasPrefix(path, "/ingestion/runs"):
 		return "/ingestion/runs"
 	case strings.HasPrefix(path, "/ingestion/files"):

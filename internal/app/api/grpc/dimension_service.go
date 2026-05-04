@@ -4,7 +4,7 @@ import (
 	"context"
 
 	japanapiv1 "japan_data_project/proto/japanapi/v1"
-	v1svc "japan_data_project/internal/app/api/handler/v1"
+	"japan_data_project/internal/app/query"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -13,7 +13,7 @@ import (
 // dimensionService implements the DimensionService gRPC server.
 type dimensionService struct {
 	japanapiv1.UnimplementedDimensionServiceServer
-	svc *v1svc.Service
+	q *query.Service
 }
 
 func (s *dimensionService) ListMarkets(ctx context.Context, req *japanapiv1.ListMarketsRequest) (*japanapiv1.ListMarketsResponse, error) {
@@ -62,7 +62,7 @@ func (s *dimensionService) queryDimensions(ctx context.Context, kind string, fil
 		order = filter.GetOrder()
 	}
 
-	result, err := s.svc.ListDimensions(ctx, v1svc.DimensionQuery{
+	result, err := s.q.ListDimensions(ctx, query.DimensionQuery{
 		Kind:   kind,
 		Limit:  int(limit),
 		Offset: int(offset),

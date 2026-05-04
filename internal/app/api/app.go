@@ -62,8 +62,8 @@ func Run() error {
 		}
 	}()
 
-	// ----- gRPC Server -----
-	grpcServer := grpc.New(h.APIV1(), h.Monitoring(), cfg.App.GRPCPort, logger)
+	// ----- gRPC Server (uses shared query.Service) -----
+	grpcServer := grpc.New(h.QueryService(), h.Monitoring(), cfg.App.GRPCPort, logger)
 	go func() {
 		logger.Info("gRPC server starting", "port", cfg.App.GRPCPort)
 		if err := grpcServer.Start(); err != nil {

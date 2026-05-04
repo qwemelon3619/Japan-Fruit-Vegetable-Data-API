@@ -4,7 +4,7 @@ import (
 	"context"
 
 	japanapiv1 "japan_data_project/proto/japanapi/v1"
-	v1svc "japan_data_project/internal/app/api/handler/v1"
+	"japan_data_project/internal/app/query"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -13,7 +13,7 @@ import (
 // analysisService implements the AnalysisService gRPC server.
 type analysisService struct {
 	japanapiv1.UnimplementedAnalysisServiceServer
-	svc *v1svc.Service
+	q *query.Service
 }
 
 // CompareMarkets returns market comparison data for a given date and item.
@@ -29,9 +29,8 @@ func (s *analysisService) CompareMarkets(ctx context.Context, req *japanapiv1.Co
 	if metric == "" {
 		metric = "price_mid"
 	}
-	order := req.GetOrder()
 
-	result, err := s.svc.GetCompareMarkets(ctx, req.GetDate(), req.GetItemCode(), metric, order)
+	result, err := s.q.GetCompareMarkets(ctx, req.GetDate(), req.GetItemCode(), metric, req.GetOrder())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "compare markets query failed: %v", err)
 	}
@@ -72,7 +71,7 @@ func (s *analysisService) RankItems(ctx context.Context, req *japanapiv1.RankIte
 		limit = 50
 	}
 
-	result, err := s.svc.GetRankItems(ctx, req.GetDate(), metric, req.GetMarketCode(), req.GetOrder(), limit)
+	result, err := s.q.GetRankItems(ctx, req.GetDate(), metric, req.GetMarketCode(), req.GetOrder(), limit)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "rank items query failed: %v", err)
 	}

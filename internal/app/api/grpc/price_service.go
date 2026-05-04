@@ -4,7 +4,7 @@ import (
 	"context"
 
 	japanapiv1 "japan_data_project/proto/japanapi/v1"
-	v1svc "japan_data_project/internal/app/api/handler/v1"
+	"japan_data_project/internal/app/query"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -13,7 +13,7 @@ import (
 // priceService implements the PriceService gRPC server.
 type priceService struct {
 	japanapiv1.UnimplementedPriceServiceServer
-	svc *v1svc.Service
+	q *query.Service
 }
 
 // GetDailyPrices returns paginated daily price rows.
@@ -24,11 +24,11 @@ func (s *priceService) GetDailyPrices(ctx context.Context, req *japanapiv1.GetDa
 	}
 
 	dr := pf.GetDateRange()
-	result, err := s.svc.GetDailyPrices(ctx, v1svc.PriceFilter{
+	result, err := s.q.GetDailyPrices(ctx, query.PriceFilter{
 		ItemCode:   pf.GetItemCode(),
 		MarketCode: pf.GetMarketCode(),
 		OriginCode: pf.GetOriginCode(),
-		DateRange: v1svc.DateRange{
+		DateRange: query.DateRange{
 			Date: dr.GetDate(),
 			From: dr.GetFrom(),
 			To:   dr.GetTo(),
@@ -64,7 +64,7 @@ func (s *priceService) GetLatestPrices(ctx context.Context, req *japanapiv1.GetL
 		return nil, status.Error(codes.InvalidArgument, "item_code is required")
 	}
 
-	result, err := s.svc.GetLatestPrices(ctx, v1svc.PriceFilter{
+	result, err := s.q.GetLatestPrices(ctx, query.PriceFilter{
 		ItemCode:   req.GetItemCode(),
 		MarketCode: req.GetMarketCode(),
 		OriginCode: req.GetOriginCode(),
@@ -94,11 +94,11 @@ func (s *priceService) GetPriceTrend(ctx context.Context, req *japanapiv1.GetPri
 	}
 
 	dr := req.GetDateRange()
-	result, err := s.svc.GetPriceTrend(ctx, v1svc.PriceFilter{
+	result, err := s.q.GetPriceTrend(ctx, query.PriceFilter{
 		ItemCode:   req.GetItemCode(),
 		MarketCode: req.GetMarketCode(),
 		OriginCode: req.GetOriginCode(),
-		DateRange: v1svc.DateRange{
+		DateRange: query.DateRange{
 			From: dr.GetFrom(),
 			To:   dr.GetTo(),
 		},
@@ -133,11 +133,11 @@ func (s *priceService) GetPriceSummary(ctx context.Context, req *japanapiv1.GetP
 	}
 
 	dr := req.GetDateRange()
-	result, err := s.svc.GetPriceSummary(ctx, v1svc.PriceFilter{
+	result, err := s.q.GetPriceSummary(ctx, query.PriceFilter{
 		ItemCode:   req.GetItemCode(),
 		MarketCode: req.GetMarketCode(),
 		OriginCode: req.GetOriginCode(),
-		DateRange: v1svc.DateRange{
+		DateRange: query.DateRange{
 			From: dr.GetFrom(),
 			To:   dr.GetTo(),
 		},
@@ -162,8 +162,7 @@ func (s *priceService) GetPriceSummary(ctx context.Context, req *japanapiv1.GetP
 
 // ---- Conversion helpers ----
 
-func toDailyPriceRows(rows []v1svc.DailyRow) []*japanapiv1.DailyPriceRow {
-	// Implemented inline via the shim functions below
+func toDailyPriceRows(rows []query.DailyRow) []*japanapiv1.DailyPriceRow {
 	out := make([]*japanapiv1.DailyPriceRow, len(rows))
 	for i, r := range rows {
 		out[i] = toDailyPriceRow(r)
@@ -171,7 +170,7 @@ func toDailyPriceRows(rows []v1svc.DailyRow) []*japanapiv1.DailyPriceRow {
 	return out
 }
 
-func toDailyPriceRow(r v1svc.DailyRow) *japanapiv1.DailyPriceRow {
+func toDailyPriceRow(r query.DailyRow) *japanapiv1.DailyPriceRow {
 	pb := &japanapiv1.DailyPriceRow{
 		TradeDate:   r.TradeDate,
 		WeekdayJa:   r.WeekdayJA,
@@ -215,7 +214,7 @@ func float64Ptr(v float64) *float64 {
 	return &v
 }
 
-func toTrendRows(rows []v1svc.TrendRow) []*japanapiv1.TrendRow {
+func toTrendRows(rows []query.TrendRow) []*japanapiv1.TrendRow {
 	out := make([]*japanapiv1.TrendRow, len(rows))
 	for i, r := range rows {
 		out[i] = toTrendRow(r)
@@ -223,10 +222,10 @@ func toTrendRows(rows []v1svc.TrendRow) []*japanapiv1.TrendRow {
 	return out
 }
 
-func toTrendRow(r v1svc.TrendRow) *japanapiv1.TrendRow {
+func toTrendRow(r query.TrendRow) *japanapiv1.TrendRow {
 	pb := &japanapiv1.TrendRow{
-		TradeDate:  r.TradeDate,
-		RowsCount:  r.RowsCount,
+		TradeDate: r.TradeDate,
+		RowsCount: r.RowsCount,
 	}
 	if r.AvgPriceMid != nil {
 		pb.AvgPriceMidYen = float64Ptr(*r.AvgPriceMid)
@@ -245,7 +244,7 @@ func toTrendRow(r v1svc.TrendRow) *japanapiv1.TrendRow {
 	return pb
 }
 
-func toSummaryRows(rows []v1svc.SummaryRow) []*japanapiv1.SummaryRow {
+func toSummaryRows(rows []query.SummaryRow) []*japanapiv1.SummaryRow {
 	out := make([]*japanapiv1.SummaryRow, len(rows))
 	for i, r := range rows {
 		out[i] = toSummaryRow(r)
@@ -253,7 +252,7 @@ func toSummaryRows(rows []v1svc.SummaryRow) []*japanapiv1.SummaryRow {
 	return out
 }
 
-func toSummaryRow(r v1svc.SummaryRow) *japanapiv1.SummaryRow {
+func toSummaryRow(r query.SummaryRow) *japanapiv1.SummaryRow {
 	pb := &japanapiv1.SummaryRow{
 		Period:    r.Period,
 		RowsCount: r.RowsCount,

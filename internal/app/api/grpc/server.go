@@ -8,7 +8,7 @@ import (
 	japanapiv1 "japan_data_project/proto/japanapi/v1"
 
 	"japan_data_project/internal/app/api/handler/monitoring"
-	v1svc "japan_data_project/internal/app/api/handler/v1"
+	"japan_data_project/internal/app/query"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -22,7 +22,7 @@ type Server struct {
 }
 
 // New creates a new gRPC server with all services registered.
-func New(v1Service *v1svc.Service, monSvc *monitoring.Service, port int, logger *slog.Logger) *Server {
+func New(qSvc *query.Service, monSvc *monitoring.Service, port int, logger *slog.Logger) *Server {
 	s := &Server{
 		port:   port,
 		logger: logger,
@@ -37,13 +37,13 @@ func New(v1Service *v1svc.Service, monSvc *monitoring.Service, port int, logger 
 		),
 	)
 
-	// Register services
-	japanapiv1.RegisterCoverageServiceServer(grpcSrv, &coverageService{svc: v1Service})
-	japanapiv1.RegisterDimensionServiceServer(grpcSrv, &dimensionService{svc: v1Service})
-	japanapiv1.RegisterPriceServiceServer(grpcSrv, &priceService{svc: v1Service})
-	japanapiv1.RegisterSystemServiceServer(grpcSrv, &systemService{svc: v1Service})
-	japanapiv1.RegisterAnalysisServiceServer(grpcSrv, &analysisService{svc: v1Service})
-	japanapiv1.RegisterIngestionServiceServer(grpcSrv, &ingestionService{svc: v1Service})
+	// Register services — all share the same query.Service
+	japanapiv1.RegisterCoverageServiceServer(grpcSrv, &coverageService{q: qSvc})
+	japanapiv1.RegisterDimensionServiceServer(grpcSrv, &dimensionService{q: qSvc})
+	japanapiv1.RegisterPriceServiceServer(grpcSrv, &priceService{q: qSvc})
+	japanapiv1.RegisterSystemServiceServer(grpcSrv, &systemService{q: qSvc})
+	japanapiv1.RegisterAnalysisServiceServer(grpcSrv, &analysisService{q: qSvc})
+	japanapiv1.RegisterIngestionServiceServer(grpcSrv, &ingestionService{q: qSvc})
 
 	// Enable reflection for grpcurl and debugging
 	reflection.Register(grpcSrv)

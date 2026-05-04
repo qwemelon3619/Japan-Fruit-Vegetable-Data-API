@@ -5,7 +5,7 @@ import (
 	"time"
 
 	japanapiv1 "japan_data_project/proto/japanapi/v1"
-	v1svc "japan_data_project/internal/app/api/handler/v1"
+	"japan_data_project/internal/app/query"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -14,7 +14,7 @@ import (
 // ingestionService implements the IngestionService gRPC server.
 type ingestionService struct {
 	japanapiv1.UnimplementedIngestionServiceServer
-	svc *v1svc.Service
+	q *query.Service
 }
 
 // ListIngestionRuns returns a paginated list of ingestion runs.
@@ -25,7 +25,7 @@ func (s *ingestionService) ListIngestionRuns(ctx context.Context, req *japanapiv
 	}
 	offset := int(req.GetOffset())
 
-	result, err := s.svc.ListIngestionRuns(ctx, limit, offset)
+	result, err := s.q.ListIngestionRuns(ctx, limit, offset)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "list ingestion runs failed: %v", err)
 	}
@@ -70,7 +70,7 @@ func (s *ingestionService) ListIngestionFiles(ctx context.Context, req *japanapi
 		runID = &id
 	}
 
-	result, err := s.svc.ListIngestionFiles(ctx, runID, limit, offset)
+	result, err := s.q.ListIngestionFiles(ctx, runID, limit, offset)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "list ingestion files failed: %v", err)
 	}

@@ -4,7 +4,7 @@ import (
 	"context"
 
 	japanapiv1 "japan_data_project/proto/japanapi/v1"
-	v1svc "japan_data_project/internal/app/api/handler/v1"
+	"japan_data_project/internal/app/query"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -13,12 +13,12 @@ import (
 // coverageService implements the CoverageService gRPC server.
 type coverageService struct {
 	japanapiv1.UnimplementedCoverageServiceServer
-	svc *v1svc.Service
+	q *query.Service
 }
 
 // GetCoverage returns coverage information.
 func (s *coverageService) GetCoverage(ctx context.Context, req *japanapiv1.GetCoverageRequest) (*japanapiv1.GetCoverageResponse, error) {
-	result, err := s.svc.GetCoverage(ctx)
+	result, err := s.q.GetCoverage(ctx)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "coverage query failed: %v", err)
 	}

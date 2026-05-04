@@ -46,6 +46,18 @@
       "response_example": "# HELP http_requests_total Total number of HTTP requests\n# TYPE http_requests_total counter\nhttp_requests_total{method=\"GET\",path=\"/ready\",status=\"2xx\"} 12"
     },
     {
+      "path": "/doc",
+      "method": "GET",
+      "summary": "Interactive API reference (HTML) with full endpoint documentation and multilingual support (en/ja/ko).",
+      "response_example": "<!doctype html><html lang=\"en\"><head>...</head><body>API reference page</body></html>"
+    },
+    {
+      "path": "/doc-llm",
+      "method": "GET",
+      "summary": "Machine-readable API reference in OpenAI/LLM-friendly JSON format.",
+      "response_example": "This file — a structured JSON object describing all endpoints, request/response fields, rules, and gRPC services."
+    },
+    {
       "path": "/monitoring/dashboard",
       "method": "GET",
       "summary": "Returns the monitoring dashboard HTML page.",
@@ -65,13 +77,13 @@
       "example": "GET /v1/coverage",
       "response_example": {
         "data": {
-          "earliest_trade_date": "2021-04-08",
-          "latest_trade_date": "2026-04-10",
-          "fact_rows_total": 123456,
-          "last_ingestion_run_id": 42,
+          "earliest_trade_date": "2016-01-05",
+          "latest_trade_date": "2026-05-02",
+          "fact_rows_total": 3890041,
+          "last_ingestion_run_id": 26,
           "last_ingestion_status": "success",
-          "last_ingestion_run_type": "daily",
-          "last_ingestion_finished_at": "2026-04-10T01:23:45Z"
+          "last_ingestion_run_type": "cron_daily_20260502",
+          "last_ingestion_finished_at": "2026-05-02T16:00:06Z"
         },
         "meta": {}
       },
@@ -467,8 +479,8 @@
             "id": 42,
             "run_type": "daily",
             "status": "success",
-            "started_at": "2026-04-10T01:00:00Z",
-            "finished_at": "2026-04-10T01:23:45Z"
+            "started_at": "2026-05-02T16:00:03+09:00",
+            "finished_at": "2026-05-02T16:00:06+09:00"
           }
         ],
         "meta": {

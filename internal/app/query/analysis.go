@@ -1,23 +1,8 @@
-package v1
+package query
 
 import (
 	"context"
 )
-
-// CompareMarketRow holds a single market comparison result row.
-type CompareMarketRow struct {
-	MarketCode  string   `gorm:"column:market_code"`
-	MarketName  string   `gorm:"column:market_name"`
-	RowsCount   int64    `gorm:"column:rows_count"`
-	MetricValue *float64 `gorm:"column:metric_value"`
-}
-
-// CompareMarketsResult holds the result of a compare markets query.
-type CompareMarketsResult struct {
-	Rows   []CompareMarketRow
-	Metric string
-	Total  int
-}
 
 // GetCompareMarkets returns market comparison data for a given date and item.
 func (s *Service) GetCompareMarkets(ctx context.Context, date, itemCode, metric, order string) (*CompareMarketsResult, error) {
@@ -65,25 +50,9 @@ func (s *Service) GetCompareMarkets(ctx context.Context, date, itemCode, metric,
 	return &CompareMarketsResult{Rows: rows, Metric: metric, Total: len(rows)}, nil
 }
 
-// RankingItemRow holds a single ranking item result row.
-type RankingItemRow struct {
-	ItemCode    string   `gorm:"column:item_code"`
-	ItemName    string   `gorm:"column:item_name"`
-	RowsCount   int64    `gorm:"column:rows_count"`
-	MetricValue *float64 `gorm:"column:metric_value"`
-}
-
-// RankItemsResult holds the result of a rank items query.
-type RankItemsResult struct {
-	Rows   []RankingItemRow
-	Metric string
-	Limit  int
-	Total  int
-}
-
 // GetRankItems returns ranked items for a given date.
 func (s *Service) GetRankItems(ctx context.Context, date, metric, marketCode, order string, limit int) (*RankItemsResult, error) {
-	l := clampInt(limit, 1, 500)
+	l := ClampInt(limit, 1, 500)
 
 	metricExpr := "SUM(f.arrival_ton)::float8"
 	metricCountExpr := "COUNT(f.arrival_ton)"
@@ -99,10 +68,8 @@ func (s *Service) GetRankItems(ctx context.Context, date, metric, marketCode, or
 	}
 	ord := parseOrder(order)
 
-	var marketID *uint
 	where := "WHERE f.trade_date = ?"
 	args := []any{date}
-
 	if marketCode != "" {
 		ids, err := s.resolveCodeIDs(ctx, "", marketCode, "")
 		if err != nil {
@@ -111,9 +78,8 @@ func (s *Service) GetRankItems(ctx context.Context, date, metric, marketCode, or
 		if ids == nil || ids.MarketID == nil {
 			return &RankItemsResult{Rows: []RankingItemRow{}, Metric: metric, Limit: l}, nil
 		}
-		marketID = ids.MarketID
 		where += " AND f.market_id = ?"
-		args = append(args, *marketID)
+		args = append(args, *ids.MarketID)
 	}
 
 	query := `

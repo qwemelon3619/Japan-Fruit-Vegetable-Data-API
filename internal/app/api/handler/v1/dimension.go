@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"japan_data_project/internal/app/query"
 )
 
 func (h *Service) handleMarkets(w http.ResponseWriter, r *http.Request) {
@@ -26,18 +28,18 @@ func (h *Service) handleDimensionListHTTP(w http.ResponseWriter, r *http.Request
 	}
 
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
-	if err := validateSearchQuery(q); err != nil {
-		writeErr(w, http.StatusBadRequest, "INVALID_ARGUMENT", err.Error())
+	if len(q) > 100 {
+		writeErr(w, http.StatusBadRequest, "INVALID_ARGUMENT", "q too long: max 100 chars")
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
 	defer cancel()
 
-	result, err := h.ListDimensions(ctx, DimensionQuery{
+	result, err := h.q.ListDimensions(ctx, query.DimensionQuery{
 		Kind:   kind,
-		Limit:  parseIntOrDefault(r.URL.Query().Get("limit"), 50),
-		Offset: parseIntOrDefault(r.URL.Query().Get("offset"), 0),
+		Limit:  queryParseIntOrDefault(r.URL.Query().Get("limit"), 50),
+		Offset: queryParseIntOrDefault(r.URL.Query().Get("offset"), 0),
 		Q:      q,
 		Sort:   r.URL.Query().Get("sort"),
 		Order:  r.URL.Query().Get("order"),

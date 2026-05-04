@@ -128,6 +128,12 @@ https://jp-vgfr-api.seungpyo.xyz/doc-llm
   - `japanapi.v1.PriceService/GetLatestPrices`
   - `japanapi.v1.PriceService/GetPriceTrend`
   - `japanapi.v1.PriceService/GetPriceSummary`
+  - `japanapi.v1.SystemService/GetHealth`
+  - `japanapi.v1.SystemService/GetReady`
+  - `japanapi.v1.AnalysisService/CompareMarkets`
+  - `japanapi.v1.AnalysisService/RankItems`
+  - `japanapi.v1.IngestionService/ListIngestionRuns`
+  - `japanapi.v1.IngestionService/ListIngestionFiles`
 
 ## エンドポイント動作概要
 
@@ -135,6 +141,8 @@ https://jp-vgfr-api.seungpyo.xyz/doc-llm
 - `GET /health`: ライブネスチェックで、`{ "data": { "status": "ok" } }` を返します
 - `GET /ready`: キャッシュされたデータベース ping 結果に基づくレディネスチェック
 - `GET /metrics`: Prometheus のプレーンテキストメトリクス
+- `GET /doc`: 対話型 API リファレンス (HTML)
+- `GET /doc-llm`: LLM 向け API リファレンス (JSON)
 - `GET /monitoring/dashboard`: 監視ダッシュボード HTML
 - `GET /monitoring/snapshots.csv`: 設定されたスナップショットパスからの監視 CSV スナップショットファイル
 
@@ -256,7 +264,7 @@ grpc_request_duration_seconds_sum{method="/japanapi.v1.CoverageService/GetCovera
 - `japan-data-api` は API プロセスを継続稼働させるために `command: "api"` で実行する必要があります
 - `japan-data-pipeline-cron` は cron をフォアグラウンドで維持するために `command: "start-cron.sh"` で実行する必要があります
 - prebuilt イメージ使用時に `command` を省略すると、イメージのデフォルトコマンドが one-shot パイプラインスクリプトを実行し、コンテナは正常に終了します
-- 公開デプロイでは `/monitoring`, `/metrics`, `/doc` に対してリバースプロキシ、IP 制限、または Cloudflare ルールを推奨します
+- 公開デプロイでは `/monitoring/*`, `/metrics`, `/doc`, `/doc-llm`, `/ready` に対してリバースプロキシ、IP 制限、または Cloudflare ルールを推奨します
 - `/doc`, `/doc-llm`, `/monitoring/*`, `/metrics`, `/ready`, および取り込み関連ルートは管理者または内部ネットワークのみに制限してください
 - 本番環境では、Nginx のアクセスルールに加えて Cloudflare のアクセス制御と burst 保護を使用しています
 
@@ -285,7 +293,7 @@ grpc_request_duration_seconds_sum{method="/japanapi.v1.CoverageService/GetCovera
 5. 監視スナップショットは別途 `data/monitoring/csv/snapshots.csv` に書き込まれます
 
 ## データカバレッジ
-- 現在確認されている最も古い保存済み取引日: `2021-04-08`
+- 現在確認されている最も古い保存済み取引日: `2016-01-05`
 - カバレッジはソースの提供状況に依存し、非営業日と未公開日はスキップされます
 - downloader はより広い履歴範囲を試行できますが、実際に保存されるのはソースポータルで公開されている日付のみです
 
@@ -342,9 +350,9 @@ grpcurl -plaintext -d '{"runId":26,"limit":3}' localhost:9090 japanapi.v1.Ingest
 
 **本番（TLS via Cloudflare）:**
 ```bash
-grpcurl -servername jp-vgfr-grpc.seungpyo.xyz 104.21.1.156:443 japanapi.v1.SystemService/GetHealth
-grpcurl -servername jp-vgfr-grpc.seungpyo.xyz -d '{"date":"2026-05-01","itemCode":"37210"}' 104.21.1.156:443 japanapi.v1.AnalysisService/CompareMarkets
-grpcurl -servername jp-vgfr-grpc.seungpyo.xyz -d '{"limit":3}' 104.21.1.156:443 japanapi.v1.IngestionService/ListIngestionRuns
+grpcurl jp-vgfr-grpc.seungpyo.xyz:443 japanapi.v1.SystemService/GetHealth
+grpcurl -d '{"date":"2026-05-01","itemCode":"37210"}' jp-vgfr-grpc.seungpyo.xyz:443 japanapi.v1.AnalysisService/CompareMarkets
+grpcurl -d '{"limit":3}' jp-vgfr-grpc.seungpyo.xyz:443 japanapi.v1.IngestionService/ListIngestionRuns
 ```
 
 ## テスト
@@ -620,13 +628,13 @@ curl -s "http://localhost:8080/v1/coverage"
 ```json
 {
   "data": {
-    "earliest_trade_date": "2021-04-08",
-    "latest_trade_date": "2026-04-10",
-    "fact_rows_total": 123456,
-    "last_ingestion_run_id": 42,
+    "earliest_trade_date": "2016-01-05",
+    "latest_trade_date": "2026-05-02",
+    "fact_rows_total": 3890041,
+    "last_ingestion_run_id": 26,
     "last_ingestion_status": "success",
-    "last_ingestion_run_type": "daily",
-    "last_ingestion_finished_at": "2026-04-10T01:23:45Z"
+    "last_ingestion_run_type": "cron_daily_20260502",
+    "last_ingestion_finished_at": "2026-05-02T16:00:06Z"
   },
   "meta": {}
 }

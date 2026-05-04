@@ -250,13 +250,13 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
         <h3 data-i18n="responseExample">Response Example</h3>
         <pre>{
   "data": {
-    "earliest_trade_date": "2021-04-08",
-    "latest_trade_date": "2026-04-10",
-    "fact_rows_total": 123456,
-    "last_ingestion_run_id": 42,
+    "earliest_trade_date": "2016-01-05",
+    "latest_trade_date": "2026-05-02",
+    "fact_rows_total": 3890041,
+    "last_ingestion_run_id": 26,
     "last_ingestion_status": "success",
-    "last_ingestion_run_type": "daily",
-    "last_ingestion_finished_at": "2026-04-10T01:23:45Z"
+    "last_ingestion_run_type": "cron_daily_20260502",
+    "last_ingestion_finished_at": "2026-05-02T16:00:06Z"
   },
   "meta": {}
 }</pre>
@@ -612,8 +612,8 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
       "id": 42,
       "run_type": "daily",
       "status": "success",
-      "started_at": "2026-04-10T01:00:00Z",
-      "finished_at": "2026-04-10T01:23:45Z"
+      "started_at": "2026-05-02T16:00:03+09:00",
+      "finished_at": "2026-05-02T16:00:06+09:00"
     }
   ],
   "meta": {

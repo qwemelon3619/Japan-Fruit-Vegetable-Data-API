@@ -128,6 +128,12 @@ Production deployments for this project additionally enforce access control and 
   - `japanapi.v1.PriceService/GetLatestPrices`
   - `japanapi.v1.PriceService/GetPriceTrend`
   - `japanapi.v1.PriceService/GetPriceSummary`
+  - `japanapi.v1.SystemService/GetHealth`
+  - `japanapi.v1.SystemService/GetReady`
+  - `japanapi.v1.AnalysisService/CompareMarkets`
+  - `japanapi.v1.AnalysisService/RankItems`
+  - `japanapi.v1.IngestionService/ListIngestionRuns`
+  - `japanapi.v1.IngestionService/ListIngestionFiles`
 
 ## Endpoint Behavior Summary
 
@@ -135,6 +141,8 @@ Production deployments for this project additionally enforce access control and 
 - `GET /health`: liveness check, returns `{ "data": { "status": "ok" } }`
 - `GET /ready`: readiness check backed by a cached database ping result
 - `GET /metrics`: Prometheus plaintext metrics
+- `GET /doc`: interactive API reference (HTML)
+- `GET /doc-llm`: LLM-friendly API reference (JSON) — structured machine-readable schema (same format as `openai.json`)
 - `GET /monitoring/dashboard`: monitoring dashboard HTML
 - `GET /monitoring/snapshots.csv`: monitoring CSV snapshot file from the configured snapshot path
 
@@ -256,7 +264,7 @@ grpc_request_duration_seconds_sum{method="/japanapi.v1.CoverageService/GetCovera
 - `japan-data-api` must run with `command: "api"` so the API process stays up
 - `japan-data-pipeline-cron` must run with `command: "start-cron.sh"` so cron stays up in foreground
 - If `command` is omitted when using prebuilt images, the image default command runs a one-shot pipeline script and the container will exit normally
-- Reverse proxy, IP restriction, or Cloudflare rules are recommended for `/monitoring`, `/metrics`, and `/doc` in public deployments
+- Reverse proxy, IP restriction, or Cloudflare rules are recommended for `/monitoring/*`, `/metrics`, `/doc`, `/doc-llm`, and `/ready` in public deployments
 - Restrict `/doc`, `/doc-llm`, `/monitoring/*`, `/metrics`, `/ready`, and ingestion-related routes to administrators or internal networks
 - Production environment uses Cloudflare access controls and burst protection in addition to Nginx access rules
 
@@ -285,7 +293,7 @@ grpc_request_duration_seconds_sum{method="/japanapi.v1.CoverageService/GetCovera
 5. Monitoring snapshots are written separately to `data/monitoring/csv/snapshots.csv`
 
 ## Data Coverage
-- Current known earliest stored trade date: `2021-04-08`
+- Current known earliest stored trade date: `2016-01-05`
 - Coverage depends on source availability; non-business days and unpublished dates are skipped
 - Downloader can attempt wider historical ranges, but only dates exposed by the source portal are actually stored
 
@@ -342,9 +350,9 @@ grpcurl -plaintext -d '{"runId":26,"limit":3}' localhost:9090 japanapi.v1.Ingest
 
 **Production (TLS via Cloudflare):**
 ```bash
-grpcurl -servername jp-vgfr-grpc.seungpyo.xyz 104.21.1.156:443 japanapi.v1.SystemService/GetHealth
-grpcurl -servername jp-vgfr-grpc.seungpyo.xyz -d '{"date":"2026-05-01","itemCode":"37210"}' 104.21.1.156:443 japanapi.v1.AnalysisService/CompareMarkets
-grpcurl -servername jp-vgfr-grpc.seungpyo.xyz -d '{"limit":3}' 104.21.1.156:443 japanapi.v1.IngestionService/ListIngestionRuns
+grpcurl jp-vgfr-grpc.seungpyo.xyz:443 japanapi.v1.SystemService/GetHealth
+grpcurl -d '{"date":"2026-05-01","itemCode":"37210"}' jp-vgfr-grpc.seungpyo.xyz:443 japanapi.v1.AnalysisService/CompareMarkets
+grpcurl -d '{"limit":3}' jp-vgfr-grpc.seungpyo.xyz:443 japanapi.v1.IngestionService/ListIngestionRuns
 ```
 
 ## Testing
@@ -386,10 +394,9 @@ k6 run tests/stress/p95_one_second_breakpoint.js
 - `api/proto/`: protobuf service definitions (.proto)
 - `proto/`: generated Go protobuf/gRPC code
 - `internal/`: domain, handler, platform, and gRPC server logic
+- `internal/app/query/`: **shared query layer** used by both HTTP and gRPC (prices, coverage, dimensions, analysis, ingestion)
 - `internal/app/api/grpc/`: gRPC server, interceptors, and service implementations (coverage, dimension, price, system, analysis, ingestion)
-- `internal/app/api/handler/v1/queries.go`: shared query layer (HTTP + gRPC)
-- `internal/app/api/handler/v1/analysis_queries.go`: CompareMarkets / RankItems query methods
-- `internal/app/api/handler/v1/ingestion_queries.go`: ListIngestionRuns / ListIngestionFiles query methods
+- `internal/app/api/handler/v1/`: HTTP-only handlers that delegate to `internal/app/query/`
 - `scripts/gen_proto.sh`: protobuf code generation script
 - `scripts/`: operational scripts
 - `docker/`: nginx and cron settings
@@ -508,7 +515,7 @@ k6 run tests/stress/p95_one_second_breakpoint.js
 - gRPC offers typed contracts, streaming potential, and efficient binary transport for programmatic clients.
 - Proto definitions serve as a single source of truth for service interfaces.
 - The REST API is unchanged and remains the primary interface for ad-hoc queries and debugging.
-- Both share the same underlying business logic via a common query layer (`handler/v1/queries.go`).
+- Both share the same underlying business logic via a common query layer (`internal/app/query/`).
 
 ## DB Schema and Index Design
 
@@ -622,13 +629,13 @@ curl -s "http://localhost:8080/v1/coverage"
 ```json
 {
   "data": {
-    "earliest_trade_date": "2021-04-08",
-    "latest_trade_date": "2026-04-10",
-    "fact_rows_total": 123456,
-    "last_ingestion_run_id": 42,
+    "earliest_trade_date": "2016-01-05",
+    "latest_trade_date": "2026-05-02",
+    "fact_rows_total": 3890041,
+    "last_ingestion_run_id": 26,
     "last_ingestion_status": "success",
-    "last_ingestion_run_type": "daily",
-    "last_ingestion_finished_at": "2026-04-10T01:23:45Z"
+    "last_ingestion_run_type": "cron_daily_20260502",
+    "last_ingestion_finished_at": "2026-05-02T16:00:06Z"
   },
   "meta": {}
 }

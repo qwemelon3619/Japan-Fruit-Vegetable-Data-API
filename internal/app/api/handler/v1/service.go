@@ -1,43 +1,25 @@
 package v1
 
 import (
-	"context"
-	"errors"
-	"fmt"
 	"net/http"
 
-	"gorm.io/gorm"
+	"japan_data_project/internal/app/query"
 )
 
-type dbObserver func(queryName string, fn func() error) error
-
+// Service provides HTTP handlers for v1 API endpoints.
+// Query methods are delegated to *query.Service (shared with gRPC).
 type Service struct {
-	db        *gorm.DB
-	observeDB dbObserver
+	q *query.Service
 }
 
-func NewService(db *gorm.DB, observer dbObserver) *Service {
-	if observer == nil {
-		observer = func(_ string, fn func() error) error {
-			if fn == nil {
-				return errors.New("nil db function")
-			}
-			return fn()
-		}
-	}
-
-	return &Service{db: db, observeDB: observer}
+// NewService creates a new v1 Service.
+func NewService(q *query.Service) *Service {
+	return &Service{q: q}
 }
 
-// Ready checks database connectivity. Used by gRPC GetReady and HTTP /ready.
-func (s *Service) Ready(ctx context.Context) error {
-	sqlDB, err := s.db.DB()
-	if err != nil {
-		return fmt.Errorf("failed to get sql db: %w", err)
-	}
-	return s.observeDB("grpc_ready", func() error {
-		return sqlDB.PingContext(ctx)
-	})
+// Q returns the underlying query service (for gRPC access).
+func (s *Service) Q() *query.Service {
+	return s.q
 }
 
 func (s *Service) Register(mux *http.ServeMux) {

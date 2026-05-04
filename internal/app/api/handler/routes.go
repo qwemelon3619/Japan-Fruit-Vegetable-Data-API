@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"japan_data_project/internal/app/query"
 	doc "japan_data_project/internal/app/api/handler/doc"
 	"japan_data_project/internal/app/api/handler/monitoring"
 	v1 "japan_data_project/internal/app/api/handler/v1"
@@ -16,16 +17,19 @@ type Handler struct {
 	doc        *doc.Service
 	monitoring *monitoring.Service
 	apiV1      *v1.Service
+	q          *query.Service
 }
 
 func New(db *gorm.DB, logger *slog.Logger) *Handler {
 	monitoringSvc := monitoring.NewService(db)
+	qSvc := query.NewService(db, monitoringSvc.ObserveDB)
 
 	return &Handler{
 		logger:     logger,
 		doc:        doc.NewService(),
 		monitoring: monitoringSvc,
-		apiV1:      v1.NewService(db, monitoringSvc.ObserveDB),
+		apiV1:      v1.NewService(qSvc),
+		q:          qSvc,
 	}
 }
 
@@ -37,6 +41,11 @@ func (h *Handler) Register(mux *http.ServeMux) {
 
 func (h *Handler) APIV1() *v1.Service {
 	return h.apiV1
+}
+
+// QueryService returns the shared query service for gRPC handlers.
+func (h *Handler) QueryService() *query.Service {
+	return h.q
 }
 
 func (h *Handler) Monitoring() *monitoring.Service {
