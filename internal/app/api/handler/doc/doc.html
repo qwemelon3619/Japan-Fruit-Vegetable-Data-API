@@ -661,6 +661,7 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
     <div class="card">
       <h2 data-i18n="grpcTitle">gRPC APIs (port 9090, HTTP/2)</h2>
       <p class="muted" data-i18n="grpcDesc">The API server also exposes a gRPC server on port 9090. All gRPC services share the same business logic as the REST endpoints. Use grpcurl or any gRPC client to call them.</p>
+      <p class="muted" data-i18n-html="grpcEndpoint"><strong>Production endpoint:</strong> <code>jp-vgfr-grpc.seungpyo.xyz:443</code> (TLS, HTTP/2, Cloudflare proxy). Examples below use <code>localhost:9090</code> for local development.</p>
 
       <div class="endpoint">
         <div class="path"><span class="method g">gRPC</span> japanapi.v1.CoverageService / GetCoverage</div>
@@ -702,6 +703,38 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
       <div class="endpoint">
         <div class="path"><span class="method g">gRPC</span> japanapi.v1.PriceService / GetPriceSummary</div>
         <p data-i18n="summaryDesc">Same as GET /v1/prices/summary.</p>
+      </div>
+
+      <div class="endpoint">
+        <div class="path"><span class="method g">gRPC</span> japanapi.v1.SystemService / GetHealth</div>
+        <p data-i18n="healthGRpcDesc">Lightweight process health check (no DB).</p>
+      </div>
+
+      <div class="endpoint">
+        <div class="path"><span class="method g">gRPC</span> japanapi.v1.SystemService / GetReady</div>
+        <p data-i18n="readyGRpcDesc">Readiness check with DB ping.</p>
+      </div>
+
+      <div class="endpoint">
+        <div class="path"><span class="method g">gRPC</span> japanapi.v1.AnalysisService / CompareMarkets</div>
+        <p data-i18n="compareGRpcDesc">Same as GET /v1/compare/markets.</p>
+        <pre>grpcurl -plaintext -d '{"date":"2026-05-01","itemCode":"37210"}' localhost:9090 japanapi.v1.AnalysisService/CompareMarkets</pre>
+      </div>
+
+      <div class="endpoint">
+        <div class="path"><span class="method g">gRPC</span> japanapi.v1.AnalysisService / RankItems</div>
+        <p data-i18n="rankingGRpcDesc">Same as GET /v1/rankings/items.</p>
+        <pre>grpcurl -plaintext -d '{"date":"2026-05-01","metric":"arrival","limit":5}' localhost:9090 japanapi.v1.AnalysisService/RankItems</pre>
+      </div>
+
+      <div class="endpoint">
+        <div class="path"><span class="method g">gRPC</span> japanapi.v1.IngestionService / ListIngestionRuns</div>
+        <p data-i18n="ingestionRunsGRpcDesc">Same as GET /ingestion/runs.</p>
+      </div>
+
+      <div class="endpoint">
+        <div class="path"><span class="method g">gRPC</span> japanapi.v1.IngestionService / ListIngestionFiles</div>
+        <p data-i18n="ingestionFilesGRpcDesc">Same as GET /ingestion/files.</p>
       </div>
 
       <p class="muted" data-i18n="grpcReflection">gRPC reflection is enabled. Use <code>grpcurl -plaintext localhost:9090 list</code> to discover all services.</p>
@@ -788,8 +821,15 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
         responseExample: "Response Example",
         grpcTitle: "gRPC APIs (port 9090, HTTP/2)",
         grpcDesc: "The API server also exposes a gRPC server on port 9090. All gRPC services share the same business logic as the REST endpoints.",
+        grpcEndpoint: "<strong>Production endpoint:</strong> <code>jp-vgfr-grpc.seungpyo.xyz:443</code> (TLS, HTTP/2, Cloudflare proxy). Examples below use <code>localhost:9090</code> for local development.",
         grpcReflection: "gRPC reflection is enabled. Use grpcurl -plaintext localhost:9090 list to discover all services.",
-        grpcMetrics: "gRPC metrics are available at /metrics (prefix: grpc_)."
+        grpcMetrics: "gRPC metrics are available at /metrics (prefix: grpc_).",
+        healthGRpcDesc: "Lightweight process health check (no DB).",
+        readyGRpcDesc: "Readiness check with DB ping.",
+        compareGRpcDesc: "Same as GET /v1/compare/markets.",
+        rankingGRpcDesc: "Same as GET /v1/rankings/items.",
+        ingestionRunsGRpcDesc: "Same as GET /ingestion/runs.",
+        ingestionFilesGRpcDesc: "Same as GET /ingestion/files."
       },
       ja: {
         title: "Japan Data API リファレンス",
@@ -848,8 +888,15 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
         responseExample: "レスポンス例",
         grpcTitle: "gRPC API（ポート 9090、HTTP/2）",
         grpcDesc: "API サーバーはポート 9090 で gRPC サーバーも公開しています。すべての gRPC サービスは REST エンドポイントと同じビジネスロジックを共有します。",
+        grpcEndpoint: "<strong>本番エンドポイント:</strong> <code>jp-vgfr-grpc.seungpyo.xyz:443</code>（TLS, HTTP/2, Cloudflare proxy）。以下の例はローカル開発用に <code>localhost:9090</code> を使用しています。",
         grpcReflection: "gRPC reflection が有効です。grpcurl -plaintext localhost:9090 list ですべてのサービスを確認できます。",
-        grpcMetrics: "gRPC メトリクスは /metrics で確認できます（接頭辞: grpc_）。"
+        grpcMetrics: "gRPC メトリクスは /metrics で確認できます（接頭辞: grpc_）。",
+        healthGRpcDesc: "軽量プロセスヘルスチェック（DB不要）。",
+        readyGRpcDesc: "DB ping を含む準備状態確認。",
+        compareGRpcDesc: "GET /v1/compare/markets と同じ。",
+        rankingGRpcDesc: "GET /v1/rankings/items と同じ。",
+        ingestionRunsGRpcDesc: "GET /ingestion/runs と同じ。",
+        ingestionFilesGRpcDesc: "GET /ingestion/files と同じ。"
       },
       ko: {
         title: "Japan Data API 레퍼런스",
@@ -908,8 +955,15 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
         responseExample: "응답 예시",
         grpcTitle: "gRPC API (포트 9090, HTTP/2)",
         grpcDesc: "API 서버는 포트 9090에서 gRPC 서버도 함께 실행합니다. 모든 gRPC 서비스는 REST 엔드포인트와 동일한 비즈니스 로직을 공유합니다.",
+        grpcEndpoint: "<strong>프로덕션 엔드포인트:</strong> <code>jp-vgfr-grpc.seungpyo.xyz:443</code> (TLS, HTTP/2, Cloudflare proxy). 아래 예제는 로컬 개발용 <code>localhost:9090</code>을 사용합니다.",
         grpcReflection: "gRPC reflection이 활성화되어 있습니다. grpcurl -plaintext localhost:9090 list 로 모든 서비스를 확인할 수 있습니다.",
-        grpcMetrics: "gRPC 메트릭은 /metrics 에서 확인할 수 있습니다 (접두사: grpc_)."
+        grpcMetrics: "gRPC 메트릭은 /metrics 에서 확인할 수 있습니다 (접두사: grpc_).",
+        healthGRpcDesc: "경량 프로세스 헬스 체크 (DB 불필요).",
+        readyGRpcDesc: "DB ping 포함 준비 상태 확인.",
+        compareGRpcDesc: "GET /v1/compare/markets 와 동일.",
+        rankingGRpcDesc: "GET /v1/rankings/items 와 동일.",
+        ingestionRunsGRpcDesc: "GET /ingestion/runs 와 동일.",
+        ingestionFilesGRpcDesc: "GET /ingestion/files 와 동일."
       }
     };
 

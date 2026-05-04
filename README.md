@@ -216,6 +216,8 @@ Production deployments for this project additionally enforce access control and 
 
 The API server runs a gRPC server side-by-side with the REST HTTP server. Both share the same business logic and database. Use `grpcurl` or any gRPC client to call these services.
 
+**Production endpoint:** `jp-vgfr-grpc.seungpyo.xyz:443` (TLS, HTTP/2, Cloudflare proxy). Examples below use `localhost:9090` for local development — replace with the production endpoint and add `-servername jp-vgfr-grpc.seungpyo.xyz` for TLS.
+
 **Available services:**
 
 | Service | RPC | Description |
@@ -228,6 +230,12 @@ The API server runs a gRPC server side-by-side with the REST HTTP server. Both s
 | | `GetLatestPrices` | Same as `GET /v1/prices/latest` |
 | | `GetPriceTrend` | Same as `GET /v1/prices/trend` |
 | | `GetPriceSummary` | Same as `GET /v1/prices/summary` |
+| `japanapi.v1.SystemService` | `GetHealth` | Lightweight process health check (no DB) |
+| | `GetReady` | Readiness check with DB ping |
+| `japanapi.v1.AnalysisService` | `CompareMarkets` | Same as `GET /v1/compare/markets` |
+| | `RankItems` | Same as `GET /v1/rankings/items` |
+| `japanapi.v1.IngestionService` | `ListIngestionRuns` | Same as `GET /ingestion/runs` |
+| | `ListIngestionFiles` | Same as `GET /ingestion/files` |
 
 **gRPC request/response fields correspond to the REST JSON fields documented above.**
 
@@ -315,6 +323,8 @@ curl -s "https://jp-vgfr-api.seungpyo.xyz/v1/rankings/items?date=2026-04-16&metr
 ```
 
 ### gRPC (port 9090, requires grpcurl)
+
+**Local (plaintext):**
 ```bash
 grpcurl -plaintext localhost:9090 japanapi.v1.CoverageService/GetCoverage
 grpcurl -plaintext -d '{"filter":{"limit":3,"sort":"name","order":"asc"}}' localhost:9090 japanapi.v1.DimensionService/ListMarkets
@@ -322,6 +332,19 @@ grpcurl -plaintext -d '{"filter":{"itemCode":"30100","dateRange":{"from":"2026-0
 grpcurl -plaintext -d '{"itemCode":"30100","limit":3}' localhost:9090 japanapi.v1.PriceService/GetLatestPrices
 grpcurl -plaintext -d '{"itemCode":"30100","dateRange":{"from":"2026-04-01","to":"2026-04-30"}}' localhost:9090 japanapi.v1.PriceService/GetPriceTrend
 grpcurl -plaintext -d '{"itemCode":"30100","groupBy":"month","dateRange":{"from":"2026-01-01","to":"2026-04-30"}}' localhost:9090 japanapi.v1.PriceService/GetPriceSummary
+grpcurl -plaintext -d '{}' localhost:9090 japanapi.v1.SystemService/GetHealth
+grpcurl -plaintext -d '{}' localhost:9090 japanapi.v1.SystemService/GetReady
+grpcurl -plaintext -d '{"date":"2026-05-01","itemCode":"37210"}' localhost:9090 japanapi.v1.AnalysisService/CompareMarkets
+grpcurl -plaintext -d '{"date":"2026-05-01","metric":"arrival","limit":5}' localhost:9090 japanapi.v1.AnalysisService/RankItems
+grpcurl -plaintext -d '{"limit":3}' localhost:9090 japanapi.v1.IngestionService/ListIngestionRuns
+grpcurl -plaintext -d '{"runId":26,"limit":3}' localhost:9090 japanapi.v1.IngestionService/ListIngestionFiles
+```
+
+**Production (TLS via Cloudflare):**
+```bash
+grpcurl -servername jp-vgfr-grpc.seungpyo.xyz 104.21.1.156:443 japanapi.v1.SystemService/GetHealth
+grpcurl -servername jp-vgfr-grpc.seungpyo.xyz -d '{"date":"2026-05-01","itemCode":"37210"}' 104.21.1.156:443 japanapi.v1.AnalysisService/CompareMarkets
+grpcurl -servername jp-vgfr-grpc.seungpyo.xyz -d '{"limit":3}' 104.21.1.156:443 japanapi.v1.IngestionService/ListIngestionRuns
 ```
 
 ## Testing
@@ -363,8 +386,10 @@ k6 run tests/stress/p95_one_second_breakpoint.js
 - `api/proto/`: protobuf service definitions (.proto)
 - `proto/`: generated Go protobuf/gRPC code
 - `internal/`: domain, handler, platform, and gRPC server logic
-- `internal/app/api/grpc/`: gRPC server, interceptors, and service implementations
+- `internal/app/api/grpc/`: gRPC server, interceptors, and service implementations (coverage, dimension, price, system, analysis, ingestion)
 - `internal/app/api/handler/v1/queries.go`: shared query layer (HTTP + gRPC)
+- `internal/app/api/handler/v1/analysis_queries.go`: CompareMarkets / RankItems query methods
+- `internal/app/api/handler/v1/ingestion_queries.go`: ListIngestionRuns / ListIngestionFiles query methods
 - `scripts/gen_proto.sh`: protobuf code generation script
 - `scripts/`: operational scripts
 - `docker/`: nginx and cron settings

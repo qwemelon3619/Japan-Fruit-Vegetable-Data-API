@@ -2,6 +2,7 @@
   "name": "Japan Fruit & Vegetable Data API",
   "description": "Structured machine-readable API reference for Japanese wholesale fruit and vegetable market data.",
   "base_url": "https://jp-vgfr-api.seungpyo.xyz",
+  "grpc_endpoint": "jp-vgfr-grpc.seungpyo.xyz:443",
   "grpc_port": 9090,
   "documentation_url": "https://jp-vgfr-api.seungpyo.xyz/doc",
   "llm_documentation_url": "https://jp-vgfr-api.seungpyo.xyz/doc-llm",
@@ -606,6 +607,58 @@
         "group_by": "string, optional: day|week|month",
         "date_range.from": "string, optional, YYYY-MM-DD",
         "date_range.to": "string, optional, YYYY-MM-DD"
+      }
+    },
+    {
+      "service": "japanapi.v1.SystemService",
+      "rpc": "GetHealth",
+      "summary": "Lightweight process health check (no database required)."
+    },
+    {
+      "service": "japanapi.v1.SystemService",
+      "rpc": "GetReady",
+      "summary": "Readiness check that pings the database."
+    },
+    {
+      "service": "japanapi.v1.AnalysisService",
+      "rpc": "CompareMarkets",
+      "summary": "Compares markets for a given date and item (same as GET /v1/compare/markets).",
+      "request_fields": {
+        "date": "string, required, YYYY-MM-DD",
+        "item_code": "string, required",
+        "metric": "string, optional: price_mid|arrival",
+        "order": "string, optional: asc|desc"
+      }
+    },
+    {
+      "service": "japanapi.v1.AnalysisService",
+      "rpc": "RankItems",
+      "summary": "Ranks items by metric for a given date (same as GET /v1/rankings/items).",
+      "request_fields": {
+        "date": "string, required, YYYY-MM-DD",
+        "metric": "string, optional: arrival|price_mid",
+        "market_code": "string, optional",
+        "limit": "int, optional, 1..500",
+        "order": "string, optional: asc|desc"
+      }
+    },
+    {
+      "service": "japanapi.v1.IngestionService",
+      "rpc": "ListIngestionRuns",
+      "summary": "Lists ingestion run history (same as GET /ingestion/runs).",
+      "request_fields": {
+        "limit": "int, optional, 1..500",
+        "offset": "int, optional, >= 0"
+      }
+    },
+    {
+      "service": "japanapi.v1.IngestionService",
+      "rpc": "ListIngestionFiles",
+      "summary": "Lists ingestion files, optionally filtered by run_id (same as GET /ingestion/files).",
+      "request_fields": {
+        "run_id": "uint32, optional",
+        "limit": "int, optional, 1..1000",
+        "offset": "int, optional, >= 0"
       }
     }
   ],

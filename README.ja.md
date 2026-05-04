@@ -216,6 +216,8 @@ https://jp-vgfr-api.seungpyo.xyz/doc-llm
 
 API サーバーは REST HTTP サーバーと並行して gRPC サーバーを実行します。両者は同じビジネスロジックとデータベースを共有します。`grpcurl` または任意の gRPC クライアントを使用して呼び出せます。
 
+**本番エンドポイント:** `jp-vgfr-grpc.seungpyo.xyz:443`（TLS, HTTP/2, Cloudflare proxy）。以下の例はローカル開発用に `localhost:9090` を使用しています。本番ではエンドポイントを差し替え、TLS の場合は `-servername jp-vgfr-grpc.seungpyo.xyz` を追加してください。
+
 **利用可能なサービス:**
 
 | サービス | RPC | 説明 |
@@ -228,6 +230,12 @@ API サーバーは REST HTTP サーバーと並行して gRPC サーバーを�
 | | `GetLatestPrices` | `GET /v1/prices/latest` と同じ |
 | | `GetPriceTrend` | `GET /v1/prices/trend` と同じ |
 | | `GetPriceSummary` | `GET /v1/prices/summary` と同じ |
+| `japanapi.v1.SystemService` | `GetHealth` | 軽量プロセスヘルスチェック（DB不要） |
+| | `GetReady` | DB ping を含む準備状態確認 |
+| `japanapi.v1.AnalysisService` | `CompareMarkets` | `GET /v1/compare/markets` と同じ |
+| | `RankItems` | `GET /v1/rankings/items` と同じ |
+| `japanapi.v1.IngestionService` | `ListIngestionRuns` | `GET /ingestion/runs` と同じ |
+| | `ListIngestionFiles` | `GET /ingestion/files` と同じ |
 
 **gRPC リクエスト/レスポンスのフィールドは、上記 REST JSON のフィールドと対応しています。**
 
@@ -315,6 +323,8 @@ curl -s "https://jp-vgfr-api.seungpyo.xyz/v1/rankings/items?date=2026-04-16&metr
 ```
 
 ### gRPC（ポート 9090、grpcurl が必要）
+
+**ローカル（平文）:**
 ```bash
 grpcurl -plaintext localhost:9090 japanapi.v1.CoverageService/GetCoverage
 grpcurl -plaintext -d '{"filter":{"limit":3,"sort":"name","order":"asc"}}' localhost:9090 japanapi.v1.DimensionService/ListMarkets
@@ -322,6 +332,19 @@ grpcurl -plaintext -d '{"filter":{"itemCode":"30100","dateRange":{"from":"2026-0
 grpcurl -plaintext -d '{"itemCode":"30100","limit":3}' localhost:9090 japanapi.v1.PriceService/GetLatestPrices
 grpcurl -plaintext -d '{"itemCode":"30100","dateRange":{"from":"2026-04-01","to":"2026-04-30"}}' localhost:9090 japanapi.v1.PriceService/GetPriceTrend
 grpcurl -plaintext -d '{"itemCode":"30100","groupBy":"month","dateRange":{"from":"2026-01-01","to":"2026-04-30"}}' localhost:9090 japanapi.v1.PriceService/GetPriceSummary
+grpcurl -plaintext -d '{}' localhost:9090 japanapi.v1.SystemService/GetHealth
+grpcurl -plaintext -d '{}' localhost:9090 japanapi.v1.SystemService/GetReady
+grpcurl -plaintext -d '{"date":"2026-05-01","itemCode":"37210"}' localhost:9090 japanapi.v1.AnalysisService/CompareMarkets
+grpcurl -plaintext -d '{"date":"2026-05-01","metric":"arrival","limit":5}' localhost:9090 japanapi.v1.AnalysisService/RankItems
+grpcurl -plaintext -d '{"limit":3}' localhost:9090 japanapi.v1.IngestionService/ListIngestionRuns
+grpcurl -plaintext -d '{"runId":26,"limit":3}' localhost:9090 japanapi.v1.IngestionService/ListIngestionFiles
+```
+
+**本番（TLS via Cloudflare）:**
+```bash
+grpcurl -servername jp-vgfr-grpc.seungpyo.xyz 104.21.1.156:443 japanapi.v1.SystemService/GetHealth
+grpcurl -servername jp-vgfr-grpc.seungpyo.xyz -d '{"date":"2026-05-01","itemCode":"37210"}' 104.21.1.156:443 japanapi.v1.AnalysisService/CompareMarkets
+grpcurl -servername jp-vgfr-grpc.seungpyo.xyz -d '{"limit":3}' 104.21.1.156:443 japanapi.v1.IngestionService/ListIngestionRuns
 ```
 
 ## テスト
