@@ -42,6 +42,8 @@ func New(v1Service *v1svc.Service, monSvc *monitoring.Service, port int, logger 
 	japanapiv1.RegisterDimensionServiceServer(grpcSrv, &dimensionService{svc: v1Service})
 	japanapiv1.RegisterPriceServiceServer(grpcSrv, &priceService{svc: v1Service})
 	japanapiv1.RegisterSystemServiceServer(grpcSrv, &systemService{svc: v1Service})
+	japanapiv1.RegisterAnalysisServiceServer(grpcSrv, &analysisService{svc: v1Service})
+	japanapiv1.RegisterIngestionServiceServer(grpcSrv, &ingestionService{svc: v1Service})
 
 	// Enable reflection for grpcurl and debugging
 	reflection.Register(grpcSrv)
