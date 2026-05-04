@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -16,7 +17,11 @@
       --code-text: #dbeafe;
       --chip: #f3f4f6;
     }
-    * { box-sizing: border-box; }
+
+    * {
+      box-sizing: border-box;
+    }
+
     body {
       margin: 0;
       background: var(--bg);
@@ -24,16 +29,37 @@
       font-family: "IBM Plex Sans", "Noto Sans", sans-serif;
       line-height: 1.5;
     }
+
     .wrap {
       max-width: 1120px;
       margin: 0 auto;
       padding: 24px 16px 56px;
     }
-    h1 { margin: 0; font-size: 30px; }
-    h2 { margin: 0 0 12px; font-size: 20px; }
-    h3 { margin: 0 0 8px; font-size: 16px; }
-    p { margin: 0 0 8px; font-size: 14px; }
-    .muted { color: var(--muted); }
+
+    h1 {
+      margin: 0;
+      font-size: 30px;
+    }
+
+    h2 {
+      margin: 0 0 12px;
+      font-size: 20px;
+    }
+
+    h3 {
+      margin: 0 0 8px;
+      font-size: 16px;
+    }
+
+    p {
+      margin: 0 0 8px;
+      font-size: 14px;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
     .topbar {
       display: flex;
       align-items: center;
@@ -41,6 +67,7 @@
       gap: 12px;
       margin-bottom: 12px;
     }
+
     .lang {
       display: inline-flex;
       align-items: center;
@@ -48,6 +75,7 @@
       font-size: 13px;
       color: var(--muted);
     }
+
     .lang select {
       border: 1px solid var(--line);
       border-radius: 8px;
@@ -56,6 +84,7 @@
       color: var(--text);
       font-size: 13px;
     }
+
     .card {
       background: var(--card);
       border: 1px solid var(--line);
@@ -63,16 +92,19 @@
       padding: 14px;
       margin-top: 12px;
     }
+
     .endpoint {
       margin-top: 14px;
       padding-top: 14px;
       border-top: 1px solid var(--line);
     }
+
     .endpoint:first-of-type {
       margin-top: 0;
       padding-top: 0;
       border-top: 0;
     }
+
     .path {
       display: inline-flex;
       align-items: center;
@@ -85,6 +117,7 @@
       font-size: 13px;
       margin-bottom: 6px;
     }
+
     .method {
       display: inline-block;
       border-radius: 6px;
@@ -94,18 +127,21 @@
       font-size: 12px;
       padding: 2px 7px;
     }
+
     .method.g {
       background: #0f766e;
       color: #fff;
       min-width: 48px;
       font-size: 11px;
     }
+
     .chips {
       margin: 8px 0;
       display: flex;
       flex-wrap: wrap;
       gap: 6px;
     }
+
     .chip {
       display: inline-block;
       border: 1px solid var(--line);
@@ -115,6 +151,7 @@
       font-size: 12px;
       color: #374151;
     }
+
     table {
       width: 100%;
       border-collapse: collapse;
@@ -122,13 +159,19 @@
       font-size: 13px;
       background: #fff;
     }
-    th, td {
+
+    th,
+    td {
       border: 1px solid var(--line);
       padding: 8px;
       text-align: left;
       vertical-align: top;
     }
-    th { background: #f9fafb; }
+
+    th {
+      background: #f9fafb;
+    }
+
     code {
       background: #f3f4f6;
       border: 1px solid var(--line);
@@ -137,6 +180,7 @@
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
       font-size: 12px;
     }
+
     pre {
       margin: 8px 0 0;
       background: var(--code-bg);
@@ -148,6 +192,7 @@
     }
   </style>
 </head>
+
 <body>
   <div class="wrap">
     <div class="topbar">
@@ -161,17 +206,26 @@
         </select>
       </label>
     </div>
-    <p class="muted" data-i18n="subtitle">Endpoint-by-endpoint API reference with parameters, request examples, and sample responses.</p>
+    <p class="muted" data-i18n="subtitle">Endpoint-by-endpoint API reference with parameters, request examples, and
+      sample responses.</p>
 
     <div class="card">
       <h2 data-i18n="overviewTitle">Overview</h2>
       <p data-i18n-html="baseUrl"><strong>Base URL:</strong> <code>https://jp-vgfr-api.seungpyo.xyz</code></p>
       <p data-i18n="auth">Authentication: none (Nginx/network policy may restrict access by environment).</p>
-      <p class="muted" data-i18n-html="adminNotice"><strong>Admin-only routes:</strong> <code>/doc</code>, <code>/doc-llm</code>, <code>/ready</code>, <code>/metrics</code>, <code>/monitoring/dashboard</code>, <code>/monitoring/snapshots.csv</code>, <code>/ingestion/runs</code>, <code>/ingestion/files</code>. Restrict these routes to administrators or internal access only.</p>
-      <p data-i18n-html="llmDoc"><strong>LLM Doc:</strong> <a href="/doc-llm" target="_blank" rel="noreferrer"><code>/doc-llm</code></a> (OpenAI/LLM-friendly JSON)</p>
-      <p data-i18n-html="dataSource"><strong>Data source:</strong> MAFF wholesale market data portal (<code>seisen.maff.go.jp</code>).</p>
-      <p class="muted" data-i18n="attributionNote">Data rights and usage conditions belong to the original provider. This API is an independent implementation.</p>
-      <p class="muted" data-i18n="metaNote">Response meta includes total row counts and optional paging fields (limit/offset). Some endpoints add extra fields like latest_trade_date, group_by, or metric.</p>
+      <p class="muted" data-i18n-html="adminNotice"><strong>Admin-only routes:</strong> <code>/doc</code>,
+        <code>/doc-llm</code>, <code>/ready</code>, <code>/metrics</code>, <code>/monitoring/dashboard</code>,
+        <code>/monitoring/snapshots.csv</code>, <code>/ingestion/runs</code>, <code>/ingestion/files</code>. Restrict
+        these routes to administrators or internal access only.
+      </p>
+      <p data-i18n-html="llmDoc"><strong>LLM Doc:</strong> <a href="/doc-llm" target="_blank"
+          rel="noreferrer"><code>/doc-llm</code></a> (OpenAI/LLM-friendly JSON)</p>
+      <p data-i18n-html="dataSource"><strong>Data source:</strong> MAFF wholesale market data portal
+        (<code>seisen.maff.go.jp</code>).</p>
+      <p class="muted" data-i18n="attributionNote">Data rights and usage conditions belong to the original provider.
+        This API is an independent implementation.</p>
+      <p class="muted" data-i18n="metaNote">Response meta includes total row counts and optional paging fields
+        (limit/offset). Some endpoints add extra fields like latest_trade_date, group_by, or metric.</p>
       <div class="chips">
         <span class="chip" data-i18n-html="rule1"><code>date/from/to</code>: YYYY-MM-DD</span>
         <span class="chip" data-i18n="rule2">from~to max 366 days</span>
@@ -244,7 +298,8 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
       <div class="endpoint">
         <div class="path"><span class="method">GET</span> /v1/coverage</div>
         <p data-i18n="coverageDesc">Returns current data coverage.</p>
-        <p class="muted" data-i18n="coveragePurpose">Use this endpoint first to confirm what date range exists in the warehouse and whether the most recent ingestion finished successfully.</p>
+        <p class="muted" data-i18n="coveragePurpose">Use this endpoint first to confirm what date range exists in the
+          warehouse and whether the most recent ingestion finished successfully.</p>
         <h3 data-i18n="requestExample">Request Example</h3>
         <pre>curl -s "https://jp-vgfr-api.seungpyo.xyz/v1/coverage"</pre>
         <h3 data-i18n="responseExample">Response Example</h3>
@@ -265,16 +320,61 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
       <div class="endpoint">
         <div class="path"><span class="method">GET</span> /v1/markets</div>
         <p data-i18n="dimensionDesc">List dimension rows (same parameter rules apply to markets/items/origins).</p>
-        <p class="muted" data-i18n="marketsPurpose">Use this to discover valid market codes before calling fact or aggregation endpoints with exact code filters.</p>
+        <p class="muted" data-i18n="marketsPurpose">Use this to discover valid market codes before calling fact or
+          aggregation endpoints with exact code filters.</p>
         <h3 data-i18n="parameters">Parameters</h3>
         <table>
-          <thead><tr><th>Name</th><th>In</th><th>Required</th><th>Type</th><th>Description</th><th>Example</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>In</th>
+              <th>Required</th>
+              <th>Type</th>
+              <th>Description</th>
+              <th>Example</th>
+            </tr>
+          </thead>
           <tbody>
-            <tr><td><code>limit</code></td><td>query</td><td>no</td><td>int</td><td>Page size (1~500)</td><td><code>50</code></td></tr>
-            <tr><td><code>offset</code></td><td>query</td><td>no</td><td>int</td><td>Page offset (>=0)</td><td><code>0</code></td></tr>
-            <tr><td><code>q</code></td><td>query</td><td>no</td><td>string</td><td>Code/name search (max 100)</td><td><code>daikon</code></td></tr>
-            <tr><td><code>sort</code></td><td>query</td><td>no</td><td>string</td><td>Sort field by endpoint</td><td><code>code</code></td></tr>
-            <tr><td><code>order</code></td><td>query</td><td>no</td><td>string</td><td><code>asc</code> or <code>desc</code></td><td><code>asc</code></td></tr>
+            <tr>
+              <td><code>limit</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>int</td>
+              <td>Page size (1~500)</td>
+              <td><code>50</code></td>
+            </tr>
+            <tr>
+              <td><code>offset</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>int</td>
+              <td>Page offset (>=0)</td>
+              <td><code>0</code></td>
+            </tr>
+            <tr>
+              <td><code>q</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>string</td>
+              <td>Code/name search (max 100)</td>
+              <td><code>daikon</code></td>
+            </tr>
+            <tr>
+              <td><code>sort</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>string</td>
+              <td>Sort field by endpoint</td>
+              <td><code>code</code></td>
+            </tr>
+            <tr>
+              <td><code>order</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>string</td>
+              <td><code>asc</code> or <code>desc</code></td>
+              <td><code>asc</code></td>
+            </tr>
           </tbody>
         </table>
         <h3 data-i18n="requestExample">Request Example</h3>
@@ -291,16 +391,61 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
       <div class="endpoint">
         <div class="path"><span class="method">GET</span> /v1/items</div>
         <p data-i18n="dimensionDesc">List dimension rows (same parameter rules apply to markets/items/origins).</p>
-        <p class="muted" data-i18n="itemsPurpose">Use this to discover valid item codes before querying raw rows, trends, summaries, or rankings.</p>
+        <p class="muted" data-i18n="itemsPurpose">Use this to discover valid item codes before querying raw rows,
+          trends, summaries, or rankings.</p>
         <h3 data-i18n="parameters">Parameters</h3>
         <table>
-          <thead><tr><th>Name</th><th>In</th><th>Required</th><th>Type</th><th>Description</th><th>Example</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>In</th>
+              <th>Required</th>
+              <th>Type</th>
+              <th>Description</th>
+              <th>Example</th>
+            </tr>
+          </thead>
           <tbody>
-            <tr><td><code>limit</code></td><td>query</td><td>no</td><td>int</td><td>Page size (1~500)</td><td><code>50</code></td></tr>
-            <tr><td><code>offset</code></td><td>query</td><td>no</td><td>int</td><td>Page offset (>=0)</td><td><code>0</code></td></tr>
-            <tr><td><code>q</code></td><td>query</td><td>no</td><td>string</td><td>Code/name search (max 100)</td><td><code>だいこん</code></td></tr>
-            <tr><td><code>sort</code></td><td>query</td><td>no</td><td>string</td><td><code>name</code>, <code>code</code>, or <code>id</code></td><td><code>name</code></td></tr>
-            <tr><td><code>order</code></td><td>query</td><td>no</td><td>string</td><td><code>asc</code> or <code>desc</code></td><td><code>asc</code></td></tr>
+            <tr>
+              <td><code>limit</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>int</td>
+              <td>Page size (1~500)</td>
+              <td><code>50</code></td>
+            </tr>
+            <tr>
+              <td><code>offset</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>int</td>
+              <td>Page offset (>=0)</td>
+              <td><code>0</code></td>
+            </tr>
+            <tr>
+              <td><code>q</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>string</td>
+              <td>Code/name search (max 100)</td>
+              <td><code>だいこん</code></td>
+            </tr>
+            <tr>
+              <td><code>sort</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>string</td>
+              <td><code>name</code>, <code>code</code>, or <code>id</code></td>
+              <td><code>name</code></td>
+            </tr>
+            <tr>
+              <td><code>order</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>string</td>
+              <td><code>asc</code> or <code>desc</code></td>
+              <td><code>asc</code></td>
+            </tr>
           </tbody>
         </table>
         <h3 data-i18n="requestExample">Request Example</h3>
@@ -317,16 +462,61 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
       <div class="endpoint">
         <div class="path"><span class="method">GET</span> /v1/origins</div>
         <p data-i18n="dimensionDesc">List dimension rows (same parameter rules apply to markets/items/origins).</p>
-        <p class="muted" data-i18n="originsPurpose">Use this to discover valid origin codes before applying exact origin filters on price endpoints.</p>
+        <p class="muted" data-i18n="originsPurpose">Use this to discover valid origin codes before applying exact origin
+          filters on price endpoints.</p>
         <h3 data-i18n="parameters">Parameters</h3>
         <table>
-          <thead><tr><th>Name</th><th>In</th><th>Required</th><th>Type</th><th>Description</th><th>Example</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>In</th>
+              <th>Required</th>
+              <th>Type</th>
+              <th>Description</th>
+              <th>Example</th>
+            </tr>
+          </thead>
           <tbody>
-            <tr><td><code>limit</code></td><td>query</td><td>no</td><td>int</td><td>Page size (1~500)</td><td><code>50</code></td></tr>
-            <tr><td><code>offset</code></td><td>query</td><td>no</td><td>int</td><td>Page offset (>=0)</td><td><code>0</code></td></tr>
-            <tr><td><code>q</code></td><td>query</td><td>no</td><td>string</td><td>Code/name search (max 100)</td><td><code>北海道</code></td></tr>
-            <tr><td><code>sort</code></td><td>query</td><td>no</td><td>string</td><td><code>name</code>, <code>code</code>, or <code>id</code></td><td><code>name</code></td></tr>
-            <tr><td><code>order</code></td><td>query</td><td>no</td><td>string</td><td><code>asc</code> or <code>desc</code></td><td><code>asc</code></td></tr>
+            <tr>
+              <td><code>limit</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>int</td>
+              <td>Page size (1~500)</td>
+              <td><code>50</code></td>
+            </tr>
+            <tr>
+              <td><code>offset</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>int</td>
+              <td>Page offset (>=0)</td>
+              <td><code>0</code></td>
+            </tr>
+            <tr>
+              <td><code>q</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>string</td>
+              <td>Code/name search (max 100)</td>
+              <td><code>北海道</code></td>
+            </tr>
+            <tr>
+              <td><code>sort</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>string</td>
+              <td><code>name</code>, <code>code</code>, or <code>id</code></td>
+              <td><code>name</code></td>
+            </tr>
+            <tr>
+              <td><code>order</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>string</td>
+              <td><code>asc</code> or <code>desc</code></td>
+              <td><code>asc</code></td>
+            </tr>
           </tbody>
         </table>
         <h3 data-i18n="requestExample">Request Example</h3>
@@ -347,17 +537,71 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
       <div class="endpoint">
         <div class="path"><span class="method">GET</span> /v1/prices/daily</div>
         <p data-i18n="dailyDesc">Raw daily fact rows for a required item_code with optional filters and paging.</p>
-        <p class="muted" data-i18n="dailyPurpose">Use this when you need raw records for debugging, auditing source rows, or building your own downstream aggregation logic.</p>
+        <p class="muted" data-i18n="dailyPurpose">Use this when you need raw records for debugging, auditing source
+          rows, or building your own downstream aggregation logic.</p>
         <h3 data-i18n="parameters">Parameters</h3>
         <table>
-          <thead><tr><th>Name</th><th>In</th><th>Required</th><th>Type</th><th>Description</th><th>Example</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>In</th>
+              <th>Required</th>
+              <th>Type</th>
+              <th>Description</th>
+              <th>Example</th>
+            </tr>
+          </thead>
           <tbody>
-            <tr><td><code>item_code</code></td><td>query</td><td>yes</td><td>string</td><td>Required item code (max 32)</td><td><code>30100</code></td></tr>
-            <tr><td><code>date</code></td><td>query</td><td>no</td><td>string</td><td>Single date</td><td><code>2026-04-01</code></td></tr>
-            <tr><td><code>from</code>, <code>to</code></td><td>query</td><td>no</td><td>string</td><td>Date range (max 366 days). If <code>date/from/to</code> are all omitted, default <code>from=today-31d</code> is applied.</td><td><code>2026-04-01</code> ~ <code>2026-04-10</code></td></tr>
-            <tr><td><code>market_code</code>, <code>origin_code</code></td><td>query</td><td>no</td><td>string</td><td>Exact code filters (max 32)</td><td><code>13300</code></td></tr>
-            <tr><td><code>limit</code>, <code>offset</code></td><td>query</td><td>no</td><td>int</td><td>Paging</td><td><code>100</code>, <code>0</code></td></tr>
-            <tr><td><code>sort</code>, <code>order</code></td><td>query</td><td>no</td><td>string</td><td>Sorting</td><td><code>trade_date</code>, <code>desc</code></td></tr>
+            <tr>
+              <td><code>item_code</code></td>
+              <td>query</td>
+              <td>yes</td>
+              <td>string</td>
+              <td>Required item code (max 32)</td>
+              <td><code>30100</code></td>
+            </tr>
+            <tr>
+              <td><code>date</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>string</td>
+              <td>Single date</td>
+              <td><code>2026-04-01</code></td>
+            </tr>
+            <tr>
+              <td><code>from</code>, <code>to</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>string</td>
+              <td>Date range (max 366 days). If <code>date/from/to</code> are all omitted, default
+                <code>from=today-31d</code> is applied.
+              </td>
+              <td><code>2026-04-01</code> ~ <code>2026-04-10</code></td>
+            </tr>
+            <tr>
+              <td><code>market_code</code>, <code>origin_code</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>string</td>
+              <td>Exact code filters (max 32)</td>
+              <td><code>13300</code></td>
+            </tr>
+            <tr>
+              <td><code>limit</code>, <code>offset</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>int</td>
+              <td>Paging</td>
+              <td><code>100</code>, <code>0</code></td>
+            </tr>
+            <tr>
+              <td><code>sort</code>, <code>order</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>string</td>
+              <td>Sorting</td>
+              <td><code>trade_date</code>, <code>desc</code></td>
+            </tr>
           </tbody>
         </table>
         <h3 data-i18n="requestExample">Request Example</h3>
@@ -398,17 +642,63 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
 
       <div class="endpoint">
         <div class="path"><span class="method">GET</span> /v1/prices/latest</div>
-        <p data-i18n="latestDesc">Returns rows for the latest available trade date for a required item_code. date, from, and to are not supported.</p>
-        <p class="muted" data-i18n="latestPurpose">Use this to power dashboards or applications that only care about the freshest available market snapshot for an item.</p>
+        <p data-i18n="latestDesc">Returns rows for the latest available trade date for a required item_code. date, from,
+          and to are not supported.</p>
+        <p class="muted" data-i18n="latestPurpose">Use this to power dashboards or applications that only care about the
+          freshest available market snapshot for an item.</p>
         <h3 data-i18n="parameters">Parameters</h3>
         <table>
-          <thead><tr><th>Name</th><th>In</th><th>Required</th><th>Type</th><th>Description</th><th>Example</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>In</th>
+              <th>Required</th>
+              <th>Type</th>
+              <th>Description</th>
+              <th>Example</th>
+            </tr>
+          </thead>
           <tbody>
-            <tr><td><code>item_code</code></td><td>query</td><td>yes</td><td>string</td><td>Required item code (max 32)</td><td><code>30100</code></td></tr>
-            <tr><td><code>date</code>, <code>from</code>, <code>to</code></td><td>query</td><td>no</td><td>string</td><td>Not supported on this endpoint</td><td><code>n/a</code></td></tr>
-            <tr><td><code>market_code</code>, <code>origin_code</code></td><td>query</td><td>no</td><td>string</td><td>Exact code filters (max 32)</td><td><code>13300</code></td></tr>
-            <tr><td><code>limit</code>, <code>offset</code></td><td>query</td><td>no</td><td>int</td><td>Paging</td><td><code>100</code>, <code>0</code></td></tr>
-            <tr><td><code>sort</code>, <code>order</code></td><td>query</td><td>no</td><td>string</td><td>Sorting</td><td><code>trade_date</code>, <code>desc</code></td></tr>
+            <tr>
+              <td><code>item_code</code></td>
+              <td>query</td>
+              <td>yes</td>
+              <td>string</td>
+              <td>Required item code (max 32)</td>
+              <td><code>30100</code></td>
+            </tr>
+            <tr>
+              <td><code>date</code>, <code>from</code>, <code>to</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>string</td>
+              <td>Not supported on this endpoint</td>
+              <td><code>n/a</code></td>
+            </tr>
+            <tr>
+              <td><code>market_code</code>, <code>origin_code</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>string</td>
+              <td>Exact code filters (max 32)</td>
+              <td><code>13300</code></td>
+            </tr>
+            <tr>
+              <td><code>limit</code>, <code>offset</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>int</td>
+              <td>Paging</td>
+              <td><code>100</code>, <code>0</code></td>
+            </tr>
+            <tr>
+              <td><code>sort</code>, <code>order</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>string</td>
+              <td>Sorting</td>
+              <td><code>trade_date</code>, <code>desc</code></td>
+            </tr>
           </tbody>
         </table>
         <h3 data-i18n="requestExample">Request Example</h3>
@@ -435,14 +725,45 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
       <div class="endpoint">
         <div class="path"><span class="method">GET</span> /v1/prices/trend</div>
         <p data-i18n="trendDesc">Trend aggregation by date for a required item_code.</p>
-        <p class="muted" data-i18n="trendPurpose">Use this to visualize daily movement over time, such as average mid-price, min/max range, and summed arrivals.</p>
+        <p class="muted" data-i18n="trendPurpose">Use this to visualize daily movement over time, such as average
+          mid-price, min/max range, and summed arrivals.</p>
         <h3 data-i18n="parameters">Parameters</h3>
         <table>
-          <thead><tr><th>Name</th><th>In</th><th>Required</th><th>Type</th><th>Description</th><th>Example</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>In</th>
+              <th>Required</th>
+              <th>Type</th>
+              <th>Description</th>
+              <th>Example</th>
+            </tr>
+          </thead>
           <tbody>
-            <tr><td><code>item_code</code></td><td>query</td><td>yes</td><td>string</td><td>Required item code (max 32)</td><td><code>30100</code></td></tr>
-            <tr><td><code>from</code>, <code>to</code></td><td>query</td><td>no</td><td>string</td><td>Date range filter. If omitted, default <code>from=today-31d</code> is applied.</td><td><code>2026-04-01</code> ~ <code>2026-04-30</code></td></tr>
-            <tr><td><code>market_code</code>, <code>origin_code</code></td><td>query</td><td>no</td><td>string</td><td>Exact code filters</td><td><code>13300</code></td></tr>
+            <tr>
+              <td><code>item_code</code></td>
+              <td>query</td>
+              <td>yes</td>
+              <td>string</td>
+              <td>Required item code (max 32)</td>
+              <td><code>30100</code></td>
+            </tr>
+            <tr>
+              <td><code>from</code>, <code>to</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>string</td>
+              <td>Date range filter. If omitted, default <code>from=today-31d</code> is applied.</td>
+              <td><code>2026-04-01</code> ~ <code>2026-04-30</code></td>
+            </tr>
+            <tr>
+              <td><code>market_code</code>, <code>origin_code</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>string</td>
+              <td>Exact code filters</td>
+              <td><code>13300</code></td>
+            </tr>
           </tbody>
         </table>
         <h3 data-i18n="requestExample">Request Example</h3>
@@ -464,9 +785,12 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
       </div>
 
       <div class="endpoint">
-        <div class="path"><span class="method">GET</span> /v1/prices/trend/1m | /v1/prices/trend/6m | /v1/prices/trend/1y</div>
-        <p>Preset trend endpoints that call the same trend aggregation with automatic date windows for the last 1 month, 6 months, or 1 year.</p>
-        <p class="muted" data-i18n="trendPresetPurpose">Use these shortcuts when the client wants a fixed recent window without computing from/to dates on its own.</p>
+        <div class="path"><span class="method">GET</span> /v1/prices/trend/1m | /v1/prices/trend/6m |
+          /v1/prices/trend/1y</div>
+        <p>Preset trend endpoints that call the same trend aggregation with automatic date windows for the last 1 month,
+          6 months, or 1 year.</p>
+        <p class="muted" data-i18n="trendPresetPurpose">Use these shortcuts when the client wants a fixed recent window
+          without computing from/to dates on its own.</p>
         <h3 data-i18n="requestExample">Request Example</h3>
         <pre>curl -s "https://jp-vgfr-api.seungpyo.xyz/v1/prices/trend/1m?item_code=30100"</pre>
         <h3 data-i18n="responseExample">Response Example</h3>
@@ -488,15 +812,53 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
       <div class="endpoint">
         <div class="path"><span class="method">GET</span> /v1/prices/summary</div>
         <p data-i18n="summaryDesc">Summary aggregation by day/week/month buckets for a required item_code.</p>
-        <p class="muted" data-i18n="summaryPurpose">Use this when you want coarser buckets than daily trend output, such as weekly or monthly rollups for reporting.</p>
+        <p class="muted" data-i18n="summaryPurpose">Use this when you want coarser buckets than daily trend output, such
+          as weekly or monthly rollups for reporting.</p>
         <h3 data-i18n="parameters">Parameters</h3>
         <table>
-          <thead><tr><th>Name</th><th>In</th><th>Required</th><th>Type</th><th>Description</th><th>Example</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>In</th>
+              <th>Required</th>
+              <th>Type</th>
+              <th>Description</th>
+              <th>Example</th>
+            </tr>
+          </thead>
           <tbody>
-            <tr><td><code>item_code</code></td><td>query</td><td>yes</td><td>string</td><td>Required item code (max 32)</td><td><code>30100</code></td></tr>
-            <tr><td><code>group_by</code></td><td>query</td><td>no</td><td>string</td><td><code>day|week|month</code> (default: day)</td><td><code>month</code></td></tr>
-            <tr><td><code>from</code>, <code>to</code></td><td>query</td><td>no</td><td>string</td><td>Date range filter. If omitted, default <code>from=today-31d</code> is applied.</td><td><code>2026-04-01</code> ~ <code>2026-04-30</code></td></tr>
-            <tr><td><code>market_code</code>, <code>origin_code</code></td><td>query</td><td>no</td><td>string</td><td>Exact code filters</td><td><code>13300</code></td></tr>
+            <tr>
+              <td><code>item_code</code></td>
+              <td>query</td>
+              <td>yes</td>
+              <td>string</td>
+              <td>Required item code (max 32)</td>
+              <td><code>30100</code></td>
+            </tr>
+            <tr>
+              <td><code>group_by</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>string</td>
+              <td><code>day|week|month</code> (default: day)</td>
+              <td><code>month</code></td>
+            </tr>
+            <tr>
+              <td><code>from</code>, <code>to</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>string</td>
+              <td>Date range filter. If omitted, default <code>from=today-31d</code> is applied.</td>
+              <td><code>2026-04-01</code> ~ <code>2026-04-30</code></td>
+            </tr>
+            <tr>
+              <td><code>market_code</code>, <code>origin_code</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>string</td>
+              <td>Exact code filters</td>
+              <td><code>13300</code></td>
+            </tr>
           </tbody>
         </table>
         <h3 data-i18n="requestExample">Request Example</h3>
@@ -525,15 +887,53 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
       <div class="endpoint">
         <div class="path"><span class="method">GET</span> /v1/compare/markets</div>
         <p data-i18n="compareDesc">Compare markets for the same date and item.</p>
-        <p class="muted" data-i18n="comparePurpose">Use this to compare the same item across markets on one date and identify where price or arrivals were relatively high or low.</p>
+        <p class="muted" data-i18n="comparePurpose">Use this to compare the same item across markets on one date and
+          identify where price or arrivals were relatively high or low.</p>
         <h3 data-i18n="parameters">Parameters</h3>
         <table>
-          <thead><tr><th>Name</th><th>In</th><th>Required</th><th>Type</th><th>Description</th><th>Example</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>In</th>
+              <th>Required</th>
+              <th>Type</th>
+              <th>Description</th>
+              <th>Example</th>
+            </tr>
+          </thead>
           <tbody>
-            <tr><td><code>date</code></td><td>query</td><td>yes</td><td>string</td><td>Target date</td><td><code>2026-04-16</code></td></tr>
-            <tr><td><code>item_code</code></td><td>query</td><td>yes</td><td>string</td><td>Item code</td><td><code>30100</code></td></tr>
-            <tr><td><code>metric</code></td><td>query</td><td>no</td><td>string</td><td><code>price_mid|arrival</code> (default: price_mid)</td><td><code>price_mid</code></td></tr>
-            <tr><td><code>order</code></td><td>query</td><td>no</td><td>string</td><td><code>asc|desc</code> (default: desc)</td><td><code>desc</code></td></tr>
+            <tr>
+              <td><code>date</code></td>
+              <td>query</td>
+              <td>yes</td>
+              <td>string</td>
+              <td>Target date</td>
+              <td><code>2026-04-16</code></td>
+            </tr>
+            <tr>
+              <td><code>item_code</code></td>
+              <td>query</td>
+              <td>yes</td>
+              <td>string</td>
+              <td>Item code</td>
+              <td><code>30100</code></td>
+            </tr>
+            <tr>
+              <td><code>metric</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>string</td>
+              <td><code>price_mid|arrival</code> (default: price_mid)</td>
+              <td><code>price_mid</code></td>
+            </tr>
+            <tr>
+              <td><code>order</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>string</td>
+              <td><code>asc|desc</code> (default: desc)</td>
+              <td><code>desc</code></td>
+            </tr>
           </tbody>
         </table>
         <h3 data-i18n="requestExample">Request Example</h3>
@@ -558,16 +958,61 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
       <div class="endpoint">
         <div class="path"><span class="method">GET</span> /v1/rankings/items</div>
         <p data-i18n="rankingDesc">Rank items for a date by arrival or price_mid.</p>
-        <p class="muted" data-i18n="rankingPurpose">Use this to build top-N style views, such as the most-arrived items or the highest-priced items for a specific trading date.</p>
+        <p class="muted" data-i18n="rankingPurpose">Use this to build top-N style views, such as the most-arrived items
+          or the highest-priced items for a specific trading date.</p>
         <h3 data-i18n="parameters">Parameters</h3>
         <table>
-          <thead><tr><th>Name</th><th>In</th><th>Required</th><th>Type</th><th>Description</th><th>Example</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>In</th>
+              <th>Required</th>
+              <th>Type</th>
+              <th>Description</th>
+              <th>Example</th>
+            </tr>
+          </thead>
           <tbody>
-            <tr><td><code>date</code></td><td>query</td><td>yes</td><td>string</td><td>Target date</td><td><code>2026-04-16</code></td></tr>
-            <tr><td><code>metric</code></td><td>query</td><td>no</td><td>string</td><td><code>arrival|price_mid</code> (default: arrival)</td><td><code>arrival</code></td></tr>
-            <tr><td><code>market_code</code></td><td>query</td><td>no</td><td>string</td><td>Optional market filter</td><td><code>1101</code></td></tr>
-            <tr><td><code>limit</code></td><td>query</td><td>no</td><td>int</td><td>Rows (1~500)</td><td><code>20</code></td></tr>
-            <tr><td><code>order</code></td><td>query</td><td>no</td><td>string</td><td><code>asc|desc</code> (default: desc)</td><td><code>desc</code></td></tr>
+            <tr>
+              <td><code>date</code></td>
+              <td>query</td>
+              <td>yes</td>
+              <td>string</td>
+              <td>Target date</td>
+              <td><code>2026-04-16</code></td>
+            </tr>
+            <tr>
+              <td><code>metric</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>string</td>
+              <td><code>arrival|price_mid</code> (default: arrival)</td>
+              <td><code>arrival</code></td>
+            </tr>
+            <tr>
+              <td><code>market_code</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>string</td>
+              <td>Optional market filter</td>
+              <td><code>1101</code></td>
+            </tr>
+            <tr>
+              <td><code>limit</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>int</td>
+              <td>Rows (1~500)</td>
+              <td><code>20</code></td>
+            </tr>
+            <tr>
+              <td><code>order</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>string</td>
+              <td><code>asc|desc</code> (default: desc)</td>
+              <td><code>desc</code></td>
+            </tr>
           </tbody>
         </table>
         <h3 data-i18n="requestExample">Request Example</h3>
@@ -599,10 +1044,33 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
         <p>Lists ingestion runs in descending id order.</p>
         <h3 data-i18n="parameters">Parameters</h3>
         <table>
-          <thead><tr><th>Name</th><th>In</th><th>Required</th><th>Type</th><th>Description</th><th>Example</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>In</th>
+              <th>Required</th>
+              <th>Type</th>
+              <th>Description</th>
+              <th>Example</th>
+            </tr>
+          </thead>
           <tbody>
-            <tr><td><code>limit</code></td><td>query</td><td>no</td><td>int</td><td>Rows (1~500)</td><td><code>50</code></td></tr>
-            <tr><td><code>offset</code></td><td>query</td><td>no</td><td>int</td><td>Page offset (&gt;=0)</td><td><code>0</code></td></tr>
+            <tr>
+              <td><code>limit</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>int</td>
+              <td>Rows (1~500)</td>
+              <td><code>50</code></td>
+            </tr>
+            <tr>
+              <td><code>offset</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>int</td>
+              <td>Page offset (&gt;=0)</td>
+              <td><code>0</code></td>
+            </tr>
           </tbody>
         </table>
         <h3 data-i18n="responseExample">Response Example</h3>
@@ -629,11 +1097,41 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
         <p>Lists ingestion file rows in descending id order, optionally filtered by run_id.</p>
         <h3 data-i18n="parameters">Parameters</h3>
         <table>
-          <thead><tr><th>Name</th><th>In</th><th>Required</th><th>Type</th><th>Description</th><th>Example</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>In</th>
+              <th>Required</th>
+              <th>Type</th>
+              <th>Description</th>
+              <th>Example</th>
+            </tr>
+          </thead>
           <tbody>
-            <tr><td><code>run_id</code></td><td>query</td><td>no</td><td>int</td><td>Positive ingestion run id</td><td><code>42</code></td></tr>
-            <tr><td><code>limit</code></td><td>query</td><td>no</td><td>int</td><td>Rows (1~1000)</td><td><code>100</code></td></tr>
-            <tr><td><code>offset</code></td><td>query</td><td>no</td><td>int</td><td>Page offset (&gt;=0)</td><td><code>0</code></td></tr>
+            <tr>
+              <td><code>run_id</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>int</td>
+              <td>Positive ingestion run id</td>
+              <td><code>42</code></td>
+            </tr>
+            <tr>
+              <td><code>limit</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>int</td>
+              <td>Rows (1~1000)</td>
+              <td><code>100</code></td>
+            </tr>
+            <tr>
+              <td><code>offset</code></td>
+              <td>query</td>
+              <td>no</td>
+              <td>int</td>
+              <td>Page offset (&gt;=0)</td>
+              <td><code>0</code></td>
+            </tr>
           </tbody>
         </table>
         <h3 data-i18n="responseExample">Response Example</h3>
@@ -659,9 +1157,13 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
     </div>
 
     <div class="card">
-      <h2 data-i18n="grpcTitle">gRPC APIs (port 9090, HTTP/2)</h2>
-      <p class="muted" data-i18n="grpcDesc">The API server also exposes a gRPC server on port 9090. All gRPC services share the same business logic as the REST endpoints. Use grpcurl or any gRPC client to call them.</p>
-      <p class="muted" data-i18n-html="grpcEndpoint"><strong>Production endpoint:</strong> <code>jp-vgfr-grpc.seungpyo.xyz:443</code> (TLS, HTTP/2, Cloudflare proxy). Examples below use <code>localhost:9090</code> for local development.</p>
+      <h2 data-i18n="grpcTitle">gRPC APIs (HTTP/2)</h2>
+      <p class="muted" data-i18n="grpcDesc">All gRPC services share the same business logic as the REST endpoints. Use
+        grpcurl or any gRPC client to call them.</p>
+      <p class="muted" data-i18n-html="grpcEndpoint"><strong>Production endpoint:</strong>
+        <code>jp-vgfr-grpc.seungpyo.xyz:443</code> (TLS, HTTP/2, Cloudflare proxy). Examples below use
+        <code>localhost:9090</code> for local development.
+      </p>
 
       <div class="endpoint">
         <div class="path"><span class="method g">gRPC</span> japanapi.v1.CoverageService / GetCoverage</div>
@@ -737,13 +1239,18 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
         <p data-i18n="ingestionFilesGRpcDesc">Same as GET /ingestion/files.</p>
       </div>
 
-      <p class="muted" data-i18n="grpcReflection">gRPC reflection is enabled. Use <code>grpcurl -plaintext localhost:9090 list</code> to discover all services.</p>
-      <p class="muted" data-i18n="grpcMetrics">gRPC metrics are available at <code>/metrics</code> (prefix: <code>grpc_</code>).</p>
+      <p class="muted" data-i18n="grpcReflection">gRPC reflection is enabled. Use
+        <code>grpcurl -plaintext localhost:9090 list</code> to discover all services.
+      </p>
+      <p class="muted" data-i18n="grpcMetrics">gRPC metrics are available at <code>/metrics</code> (prefix:
+        <code>grpc_</code>).
+      </p>
     </div>
 
     <div class="card">
       <h2 data-i18n="errorTitle">Error Response Format</h2>
-      <p class="muted" data-i18n="requiredParamNote">Missing required query parameters return INVALID_ARGUMENT with the parameter names listed in the message.</p>
+      <p class="muted" data-i18n="requiredParamNote">Missing required query parameters return INVALID_ARGUMENT with the
+        parameter names listed in the message.</p>
       <pre>{
   "error": {
     "code": "INVALID_ARGUMENT",
@@ -751,12 +1258,29 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
   }
 }</pre>
       <table>
-        <thead><tr><th>Code</th><th data-i18n="meaning">Meaning</th></tr></thead>
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th data-i18n="meaning">Meaning</th>
+          </tr>
+        </thead>
         <tbody>
-          <tr><td><code>INVALID_ARGUMENT</code></td><td data-i18n="errInvalid">Validation error in request parameters</td></tr>
-          <tr><td><code>METHOD_NOT_ALLOWED</code></td><td data-i18n="errMethod">HTTP method is not supported for endpoint</td></tr>
-          <tr><td><code>DB_NOT_READY</code></td><td data-i18n="errDbReady">Database readiness check failed</td></tr>
-          <tr><td><code>DB_ERROR</code></td><td data-i18n="errDb">Database query/count execution failed</td></tr>
+          <tr>
+            <td><code>INVALID_ARGUMENT</code></td>
+            <td data-i18n="errInvalid">Validation error in request parameters</td>
+          </tr>
+          <tr>
+            <td><code>METHOD_NOT_ALLOWED</code></td>
+            <td data-i18n="errMethod">HTTP method is not supported for endpoint</td>
+          </tr>
+          <tr>
+            <td><code>DB_NOT_READY</code></td>
+            <td data-i18n="errDbReady">Database readiness check failed</td>
+          </tr>
+          <tr>
+            <td><code>DB_ERROR</code></td>
+            <td data-i18n="errDb">Database query/count execution failed</td>
+          </tr>
         </tbody>
       </table>
     </div>
@@ -989,4 +1513,5 @@ http_requests_total{method="GET",path="/ready",status="2xx"} 12</pre>
     select.addEventListener("change", () => applyLang(select.value));
   </script>
 </body>
+
 </html>
