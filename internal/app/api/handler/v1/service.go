@@ -1,7 +1,9 @@
 package v1
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"gorm.io/gorm"
@@ -25,6 +27,17 @@ func NewService(db *gorm.DB, observer dbObserver) *Service {
 	}
 
 	return &Service{db: db, observeDB: observer}
+}
+
+// Ready checks database connectivity. Used by gRPC GetReady and HTTP /ready.
+func (s *Service) Ready(ctx context.Context) error {
+	sqlDB, err := s.db.DB()
+	if err != nil {
+		return fmt.Errorf("failed to get sql db: %w", err)
+	}
+	return s.observeDB("grpc_ready", func() error {
+		return sqlDB.PingContext(ctx)
+	})
 }
 
 func (s *Service) Register(mux *http.ServeMux) {
